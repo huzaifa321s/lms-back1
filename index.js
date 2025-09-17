@@ -30,9 +30,21 @@ const app = express();
 // Webhook route
 app.use("/api/webhook", webhookRoutes);
 // Cors configration
-const corsOptions = { origin: '*' };
+const corsOptions = {
+  origin: "*", // ya specific karo: ["http://localhost:5173", "https://yourfrontend.com"]
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 
 app.use(cors(corsOptions));
+// Preflight ke liye
+app.options("*", cors(corsOptions));
+
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ limit: "60mb", extended: true }));
 app.use(fileUpload());

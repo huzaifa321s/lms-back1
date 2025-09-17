@@ -10,25 +10,23 @@ class ChangePassword {
     }
 
     async change(req, res) {
-        let reqBody = req.body;
-        const user = req.user;
+  try {
+    const { body: reqBody, user } = req;
+    
+    const validationError = this.validateFields(reqBody);
+    if (validationError) return ErrorHandler(validationError, 400, res);
 
-        try {
+    const userExist = await this.checkExistingUser(user);
+    if (!userExist) return ErrorHandler(`No ${this.userType} found with this email`, 404, res);
 
-            const validationErrorMessage = this.validateFields(reqBody);
-            if (validationErrorMessage) return ErrorHandler(validationErrorMessage, 400, res);
+    const isPasswordUpdated = await this.validateAndUpdatePassword(userExist, reqBody);
+    if (!isPasswordUpdated) return ErrorHandler("Password does not match!", 401, res);
 
-            const userExist = await this.checkExistingUser(user);
-            if (!userExist) return ErrorHandler(`No ${this.userType} found with this email`, 404, res);
-            const passwordUpdated = await this.validateAndUpdatePassword(userExist, reqBody);
-            if (!passwordUpdated) return ErrorHandler(`Password does not match!`, 401, res);
-
-            return SuccessHandler(null, 200, res, `${this.userType} password updated sucacessfully!`);
-        } catch (error) {
-            console.error("Error updating profile details:", error);
-            return ErrorHandler('Internal server error', 500, res);
-        }
-    }
+    return SuccessHandler(null, 200, res, `${this.userType} password updated successfully!`);
+  } catch (error) {
+    return ErrorHandler("Internal server error", 500, res);
+  }
+}
 
 
     validateFields(fields) {

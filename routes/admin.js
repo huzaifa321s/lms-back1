@@ -31,11 +31,6 @@ router.route('/dashboard/cards').get([isAuthenticated, isAdmin], dashboardContro
 router.route('/dashboard/top-courses').get([isAuthenticated, isAdmin], dashboardController.getTopCourses);
 router.route('/dashboard/earnings').get([isAuthenticated, isAdmin], dashboardController.getEarnings);
 router.route('/dashboard/top-teachers').get([isAuthenticated, isAdmin], dashboardController.getTopTeachers);
-
-
-
-
-
 router.route('/dashboard/registered-last-week').get([isAuthenticated, isAdmin], dashboardController.getRegistrationsLastWeek);
 
 // Blogs
@@ -56,16 +51,19 @@ router.route('/blog-category/delete/:id').delete([isAuthenticated, isAdmin], blo
 // Student
 router.route('/student/get').get([isAuthenticated, isAdmin], studentController.get)
 router.route('/student/getStudent/:id').get([isAuthenticated, isAdmin], studentController.getStudent)
+router.route('/student/get-students-status').get([isAuthenticated, isAdmin], studentController.getStudentsStatus)
 router.route('/student/getStudentWithEnrolledCourses/:id').get([isAuthenticated, isAdmin], studentController.getStudentWithEnrolledCourses)
 router.route('/student/get-enrolled-courses').get([isAuthenticated, isAdmin], studentController.getEnrolledCourses);
 
 // Teacher
 router.route('/teacher/get').get([isAuthenticated, isAdmin], teacherController.get)
+router.route('/teacher/get-teachers-status').get([isAuthenticated, isAdmin], teacherController.getTeachersStatus)
 router.route('/teacher/getTeacher/:id').get([isAuthenticated, isAdmin], teacherController.getTeacher)
 
 // Courses
 router.route('/course/get').get([isAuthenticated, isAdmin], courseController.get);
 router.route('/course/getCourse/:id').get([isAuthenticated, isAdmin], courseController.getCourse);
+router.route('/course/get-courses-status').get([isAuthenticated, isAdmin], courseController.getCoursesStatus);
 router.route('/course/edit/:id').put([isAuthenticated, isAdmin],courseController.edit);
 router.route('/course/delete/:id').delete([isAuthenticated, isAdmin],courseController.delete);
 
