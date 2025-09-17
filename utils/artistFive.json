@@ -1,0 +1,32 @@
+[
+    {
+        "platform": "linkedin",
+        "fullName": "Mark Otto",
+        "username": "@mdo",
+        "verified": true
+    },
+    {
+        "platform": "instagram",
+        "fullName": "Thornton",
+        "username": "@fat",
+        "verified": false
+    },
+    {
+        "platform": "facebook",
+        "fullName": "Larry Bird",
+        "username": "@twitter",
+        "verified": true
+    },
+    {
+        "platform": "facebook",
+        "fullName": "John Doe",
+        "username": "@johndoe",
+        "verified": false
+    },
+    {
+        "platform": "instagram",
+        "fullName": "Jane Smith",
+        "username": "@janesmith",
+        "verified": true
+    }
+]
