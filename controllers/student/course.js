@@ -8,192 +8,172 @@ import Teachers from "../../models/teacher.js";
 import { ObjectId } from "mongodb";
 import Teacher from "../../models/teacher.js";
 
-
 const courseController = {
     enrollCourse: async (req, res) => {
-        const courseId = req.body.courseId;
         try {
-
-            const course = await Course.findById(courseId);
+            console.log('req.user ===>',req.user)
+            const course = await Course.findById(req.body.courseId);
             if (!course) return ErrorHandler('Course not found!', 404, res);
 
             const student = await Student.findById(req.user._id);
             if (student.remainingEnrollmentCount === 0) {
-                return ErrorHandler('You have exceed the limnit of enrolling courses!', 404, res);
+                return ErrorHandler('Enrollment limit exceeded!', 404, res);
             }
 
             await EnrolledCourses.create({
-                course: courseId,
+                course: req.body.courseId,
                 student: req.user._id
             });
 
-            const teacherWallet = await TeacherWallet.findOne({
-                teacher: course.instructor
-            });
-
-            if (!teacherWallet) {
-                await TeacherWallet.create({
-                    teacher: course.instructor,
-                    points: 10
-                });
-            } else {
-                const prevPoints = teacherWallet.points;
-                teacherWallet.points = prevPoints + 10;
-                await teacherWallet.save();
+            // Update teacher wallet
+            await TeacherWallet.findOneAndUpdate(
+                { teacher: course.instructor },
+                { $inc: { points: 10 } },
+                { upsert: true },
+            );
+            const teacher = await  Teacher.findById(course.instructor);
+          if (!teacher.students?.some(s => s.student === req.user._id.toString())) {
+                const id = req.user._id.toString()
+                teacher.students.push(id);
+                await teacher.save();
             }
-
+              console.log('teacher ---<>',teacher.students)
             student.remainingEnrollmentCount -= 1;
             await student.save();
 
-            return SuccessHandler({
-                remainingEnrollmentCount: student.remainingEnrollmentCount
-            }, 200, res, `You've enrolled to the course!`);
+            return SuccessHandler({ remainingEnrollmentCount: student.remainingEnrollmentCount }, 200, res, `Enrolled successfully!`);
         } catch (error) {
-            console.error("Error:", error);
+            console.log('error',error)
             return ErrorHandler('Internal server error', 500, res);
         }
     },
 
     getEnrolledCourses: async (req, res) => {
-        const { page, q ,countDocs} = req.query;
-        const pageNumber = parseInt(page) || 1;
-        const itemsPerPage = 10; // Set a default page size of 10
-        const skip = (pageNumber - 1) * itemsPerPage;
+        const { page , q, countDocs } = req.query;
+        const skip = (page - 1) * 10;
 
         try {
-          
-            if (!req.user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+            if (!req.user) return ErrorHandler('Unauthorized', 400, res);
+console.log('q ===>',q)
+            const enrolledCourses = await EnrolledCourses.find({ student: req.user._id })
+                .skip(skip)
+                .limit(10)
+                .sort({ createdAt: -1 })
+                .populate({
+                    path: "course",
+                    match: { name:{$regex:q,$options:"i"} }, 
+        
+                })
+                .select("course");
 
-            // Find the enrolled courses for the user
-            const enrolledCourseIds = await EnrolledCourses.find({
-                student: req.user._id
-            }).select('course');
-
-            // Extract course IDs from the enrolled courses
-            const courseIds = enrolledCourseIds.map(enrolled => enrolled.course);
-            console.log('courseIds.length ===>',courseIds.length)
-            // Construct the query for searching courses
-            let query = { _id: { $in: courseIds } };
-            if (q) {
-                query.name = { $regex: q, $options: "i" };
-            }
-            // Get the total count of matching courses for pagination
-
-            const totalCourses = await Course.countDocuments(query);
-            const totalPages = Math.ceil(totalCourses / itemsPerPage);
-           
-   
-            // Apply the search query and pagination to the courses
-            const courses = await Course.find(query)
-            .select('name description coverImage')
-            .skip(skip)
-            .limit(itemsPerPage);
+            let allEnrolledCourses = await EnrolledCourses.find({ student: req.user._id }).populate({
+                    path: "course",
+                    match: { name:{$regex:q,$options:"i"} }, 
+                });
+            allEnrolledCourses = allEnrolledCourses.filter((ec => ec.course !== null))
             
-           if(countDocs) {
-            return SuccessHandler(courses.length,200,res,'Courses count retrieved')
-           }
+            let filteredEnrolledCourses = enrolledCourses.filter((ec => ec.course !== null))
+            
+            filteredEnrolledCourses = filteredEnrolledCourses.map((ec => ec = ec.course));
+            console.log('filteredEnrolledCourses',filteredEnrolledCourses)
 
-            // Prepare the response data
-            const myEnrolledCourses = courses.map(course => ({
-                _id: course._id,
-                name: course.name,
-                description: course.description,
-                coverImage: course.coverImage,
-            }));
 
-            // Return the response with pagination info
-            const response = {
-                courses: myEnrolledCourses,
-                totalPages
-            };
-            return SuccessHandler(response, 200, res, `Courses retrieved!`);
+            if (countDocs) return SuccessHandler(allEnrolledCourses.length, 200, res, 'Count retrieved');
+ 
+            const totalPages = Math.ceil(allEnrolledCourses.length / 10);
+            console.log('totalPages ===>', totalPages)
+            return SuccessHandler({ courses:filteredEnrolledCourses, totalPages }, 200, res, 'Courses retrieved');
         } catch (error) {
-            console.error("Error retrieving courses:", error);
             return ErrorHandler('Internal server error', 500, res);
         }
     },
-    getCourseTeachers:async(req,res) =>{
-    let {teacherIDs} = req.query;
-    if(teacherIDs !== 'undefined') teacherIDs = JSON.parse(teacherIDs);
-    
-    try{
-        if(teacherIDs !== 'undefined') teacherIDs = teacherIDs.map((t) => t = new ObjectId(t))
-        const teachers = await Teachers.find({_id:{$in:teacherIDs}}).populate('courses');
-        if(!teachers) return ErrorHandler('Teachers not found',400,res);
-        return SuccessHandler(teachers,200,res,'Teachers fetched successfully')
-     }catch(error){
-     console.log('error',error);
-     return ErrorHandler("Internal server error",400,res);
-    }
-    },
-    getTeacher:async(req,res) =>{
-        const id = req.params.id;
-        try{
-           if(!id) return ErrorHandler('ID is required.',400,res);
-           const teacher = await Teacher.findById({_id:id}).populate('courses');
-           console.log('teacher ===>',teacher)
-           if(!teacher) return ErrorHandler('Teacher does not exist',400,res);
-           return SuccessHandler(teacher,200,res,'Teacher retrieved successfully');
-        }catch(error){
-            console.log('error',error);
-            return ErrorHandler("Internal server error",400,res);
+
+    getCourseTeachers: async (req, res) => {
+        try {
+            let { teacherIDs, page, q } = req.query;
+
+            console.log('q ===>', q)
+
+            const limit = 10;
+            const skip = (page - 1) * limit;
+            if (teacherIDs === 'undefined') return ErrorHandler('Teacher IDs required', 400, res);
+
+            teacherIDs = JSON.parse(teacherIDs).map(id => new ObjectId(id));
+            let query = { _id: { $in: teacherIDs } };
+            console.log('q ===>', q.split(' ')[0])
+            if (q) {
+                query = {
+                    ...query,
+                    firstName: { $regex: q, $options: "i" },
+                };
+                if (q.includes(" ")) {
+                    q = q.split(' ')
+                    query = {
+                        ...query,
+                        firstName: { $regex: q[0], $options: "i" },
+                        lastName: { $regex: q[1], $options: "i" }
+                    }
+                }
+
+            }
+
+            console.log('query ===>', query)
+            const teachers = await Teachers.find(query).populate('courses').skip(skip).limit(limit);
+            console.log('teachers ===>', teachers)
+
+            const totalTeachers = await Teachers.countDocuments(query);
+            const totalPages = Math.ceil(totalTeachers / limit);
+
+            return SuccessHandler({ teachers, totalPages }, 200, res, 'Teachers fetched');
+        } catch (error) {
+            return ErrorHandler("Internal server error", 400, res);
         }
     },
+
+    getTeacher: async (req, res) => {
+        try {
+            const teacher = await Teachers.findById(req.params.id).populate('courses');
+            if (!teacher) return ErrorHandler('Teacher not found', 400, res);
+
+            return SuccessHandler(teacher, 200, res, 'Teacher retrieved');
+        } catch (error) {
+            return ErrorHandler("Internal server error", 400, res);
+        }
+    },
+
     get: async (req, res) => {
-            const { page, q, teacherId } = req.query;
-    
-            const pageNumber = parseInt(page) || 1;
-            const itemsPerPage = 5; // Set a default page size of 10
-            const skip = (pageNumber - 1) * itemsPerPage;
-    
-            try {
-    
-                let query = {}
-    
-                if (q) {
-                    query = { name: { $regex: q, $options: "i" } }
-                }
-    
-                if (teacherId) {
-                    query = { ...query, instructor: teacherId }
-                }
-    
-                const totalBlogs = await Course.countDocuments(query);
-                const totalPages = Math.ceil(totalBlogs / itemsPerPage);
-    
-                const courses = await Course.find(query)
+        const { page , q, teacherId } = req.query;
+        const skip = (page - 1) * 5;
+       console.log('page ===>',page)
+        try {
+            let query = {};
+            if (q) query.name = { $regex: q, $options: "i" };
+            if (teacherId) query.instructor = teacherId;
+              console.log('query',query)
+            const [courses, total] = await Promise.all([
+                Course.find(query)
                     .skip(skip)
-                    .limit(itemsPerPage)
-                    .populate({ path: "category", select: "name" })
-                    .populate({
-                        path: "instructor",
-                        select: "_id firstName lastName"
-                    })
-                    .exec();
-    
-                return SuccessHandler({ courses, totalPages }, 200, res, `Courses retrieved!`);
-            } catch (error) {
-                console.error("Error:", error);
-                return ErrorHandler('Internal server error', 500, res);
-            }
-        },
+                    .limit(5)
+                    .populate("category", "name")
+                    .populate("instructor", "firstName lastName"),
+                Course.countDocuments(query)
+            ]);
+
+            return SuccessHandler({ courses, totalPages: Math.ceil(total / 5) }, 200, res, 'Courses retrieved');
+        } catch (error) {
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
     getEnrolledCourseDetails: async (req, res) => {
-        const id = req.params.id;
         try {
-            if (!id) return ErrorHandler('Id is required!', 400, res);
+            const course = await Course.findById(req.params.id)
+                .populate("category", "name")
+                .populate("instructor", "firstName lastName");
 
-            const course = await Course.findById(id)
-                .populate({ path: "category", select: "name" })
-                .populate({
-                    path: "instructor",
-                    select: "firstName lastName"
-                })
-                .exec();
-
-            return SuccessHandler(course, 200, res, `Course with id: ${id}, retrieved!`);
+            if (!course) return ErrorHandler('Course not found', 404, res);
+            return SuccessHandler(course, 200, res, 'Course retrieved');
         } catch (error) {
-            console.error("Error:", error);
             return ErrorHandler('Internal server error', 500, res);
         }
     }
