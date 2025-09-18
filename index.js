@@ -1,44 +1,51 @@
-import express from "express"
+import 'dotenv/config'
 import cors from "cors"
+import express from "express"
 import connectDB from "./config/db.js"
-
-import webRoutes from "./routes/web.js"
+import fileUpload from 'express-fileupload';
+// Routes
+import webhookRoutes from "./routes/webhook.js"
 import adminRoutes from "./routes/admin.js"
 import studentRoutes from "./routes/student.js"
 import teacherRoutes from "./routes/teacher.js"
+import webRoutes from "./routes/web.js"
 import testRoutes from "./routes/test.js"
-import webhookRoutes from "./routes/webhook.js"
+import mongoose from 'mongoose';
 
-const app = express()
+// import artistFive from './utils/artistFive.json' assert { type: "json" };
 
-// Fix CORS
-app.use(cors())
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*")
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
-  if (req.method === "OPTIONS") return res.sendStatus(200)
-  next()
-})
 
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// Sample data for artist portal
 
-// DB connect on demand
-app.use(async (req, res, next) => {
-  await connectDB()
-  next()
-})
+  
 
-// Routes
-app.use("/api/webhook", webhookRoutes)
+
+
+// Setting enviroment
+connectDB();
+const PORT = process.env.PORT || 8000;
+
+const app = express();
+
+// Webhook route
+app.use("/api/webhook", webhookRoutes);
+// Cors configration
+const corsOptions = { origin: '*' };
+
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ limit: "60mb", extended: true }));
+app.use(fileUpload());
+
+// Static files
+app.use("/public", express.static("public"));
+
+// API routes.
 app.use("/api/web", webRoutes)
-app.use("/api/admin", adminRoutes)
-app.use("/api/teacher", teacherRoutes)
-app.use("/api/student", studentRoutes)
-app.use("/api/test", testRoutes)
+app.use("/api/admin", adminRoutes);
+app.use("/api/teacher", teacherRoutes);
+app.use("/api/student", studentRoutes);
+app.use("/api/test", testRoutes);
 
-app.get("/", (_, res) => res.send("Bruce LMS server live! 🚀"))
-
-// IMPORTANT: No app.listen
-export default app
+app.get("/", async (_, res) => res.send('Bruce LMS server live!'));
+app.listen(PORT, () => console.log(`listening at ${PORT}`));
