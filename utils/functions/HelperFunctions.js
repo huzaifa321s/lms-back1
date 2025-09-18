@@ -2,6 +2,7 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
+import stripe from "stripe";
 // S3 Packages
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -12,6 +13,8 @@ import Subscription from '../../models/subscription.js';
 // Constants
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const stripeInstance = stripe(process.env.STRIPE_SECRET_KEY);
+
 
 // S3 Bucket constants
 const bucketName = process.env.BUCKET_NAME;
@@ -146,44 +149,62 @@ export const calcNumberOfCycles = (subscription) => {
     return numberOfCycles
 }
 
+// Input validation
+const validateInput = (subscription) => {
+  if (!subscription) throw new Error("Subscription input is required");
+  if (!(subscription instanceof mongoose.Document) && !mongoose.Types.ObjectId.isValid(subscription)) {
+    throw new Error("Invalid subscription input");
+  }
+};
+
 export const getStudentActivePlan = async (subscription) => {
+  try {
+    validateInput(subscription);
 
-    let activedPlan = null;
+    // Fetch subscription if ID is provided, otherwise use mongoose Document
+    const dbReceipt = subscription instanceof mongoose.Document 
+      ? subscription 
+      : await Subscription.findById(subscription).lean();
 
-    if (subscription) {
-        let dbReceipt = null;
+    if (!dbReceipt) return null;
 
-        // If mongoose object provided
-        if (subscription instanceof mongoose.Document) {
-            dbReceipt = subscription;
-        }
+    return {
+      _id: dbReceipt._id,
+      ...planDetails(dbReceipt.priceId),
+      user: dbReceipt.user,
+      status: dbReceipt.status,
+      subscriptionId: dbReceipt.subscriptionId,
+      customerId: dbReceipt.customerId,
+      priceId: dbReceipt.priceId,
+      trailsEndAt: dbReceipt.trailsEndAt,
+      endsAt: dbReceipt.endsAt,
+      billingCycleAnchor: dbReceipt.billingCycleAnchor,
+      currentPeriodStart: dbReceipt.currentPeriodStart,
+      currentPeriodEnd: dbReceipt.currentPeriodEnd,
+      createdAt: dbReceipt.createdAt,
+      updatedAt: dbReceipt.updatedAt,
+    };
+  } catch (error) {
+    console.error("Error in getStudentActivePlan:", error.message);
+    throw new Error(`Failed to retrieve active plan: ${error.message}`);
+  }
+};
 
-        // If id provided (string or mongoose id obj)
-        if (typeof subscription === 'string' || mongoose.Types.ObjectId.isValid(subscription)) {
-            dbReceipt = await Subscription.findById(subscription);
-        }
+
+export const validateObjectId = (id) => {
+    return mongoose.Types.ObjectId.isValid(id);
+};
 
 
+export const attachPaymentMethod = async (paymentMethodId, customerId) => {
+    return await stripeInstance.paymentMethods.attach(paymentMethodId, { customer: customerId });
+};
 
-        activedPlan = {
-            _id: dbReceipt._id,
-            ...planDetails(dbReceipt.priceId),
-            user: dbReceipt._id,
-            status: dbReceipt.status,
-            subscriptionId: dbReceipt.subscriptionId,
-            customerId: dbReceipt.customerId,
-            priceId: dbReceipt.priceId,
-            trailsEndAt: dbReceipt.trailsEndAt,
-            endsAt: dbReceipt.endsAt,
-            billingCycleAnchor: dbReceipt.billingCycleAnchor,
-            currentPeriodStart: dbReceipt.currentPeriodStart,
-            currentPeriodEnd: dbReceipt.currentPeriodEnd,
-            createdAt: dbReceipt.createdAt,
-            updatedAt: dbReceipt.updatedAt,
-        }
-    }
+export const updatePaymentMethod = async (paymentMethodId, data) => {
+    return await stripeInstance.paymentMethods.update(paymentMethodId, data);
+};
 
-    return activedPlan;
 
-}
-
+export const updateCustomer = async (customerId, data) => {
+    return await stripeInstance.customers.update(customerId, data);
+};
