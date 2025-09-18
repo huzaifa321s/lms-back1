@@ -33,6 +33,7 @@ router.route('/payment/add-new-payment-method').post([isAuthenticated, isStudent
 router.route('/payment/detach-payment-method/:id').delete([isAuthenticated, isStudent], paymentController.detachPaymentMethod);
 router.route('/payment/set-card-as-default/:id').put([isAuthenticated, isStudent], paymentController.setCardAsDefault);
 router.route('/payment/get-invoices').get([isAuthenticated, isStudent], paymentController.getAllInvoices);
+router.route('/payment/get-invoices-stats').get([isAuthenticated, isStudent], paymentController.getStats);
 router.route('/payment/get-invoices/:id').get([isAuthenticated,isStudent],paymentController.getInvoice)
 router.route('/payment/pay-invoice').post([isAuthenticated, isStudent], paymentController.payInvoice);
 
