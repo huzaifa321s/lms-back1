@@ -16,7 +16,7 @@ class StudentLogin extends Login {
         // Get enrolled courses ids if student have, so we may filter enrollment button on web
         const enrolledCourses = await EnrolledCourses.find({ student: user._id }).select('course').lean().exec();
             
-        
+        console.log('user ===>',user)
         // Final credentials
         const credentials = {
             _id: user._id,
@@ -30,13 +30,14 @@ class StudentLogin extends Login {
             remainingEnrollmentCount: user.remainingEnrollmentCount,
             status: user.status,
             notifications: user.notifications,
-            subscription: await getStudentActivePlan(user.subscriptionId),
+            subscription: user?.subscriptionId ? await getStudentActivePlan(user.subscriptionId) : null,
             enrolledCourses: enrolledCourses.map((c) => c.course),
             customerId: user.customerId,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt
 
         }
+        console.log('credentials returnable',credentials)
 
         return credentials;
     }

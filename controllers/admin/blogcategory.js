@@ -7,168 +7,195 @@ import { deleteFile } from "../../utils/functions/HelperFunctions.js";
 
 const blogCategoryController = {
 
-  add: async ({ body: { name } }, res) => {
-  try {
-    if (!name) return ErrorHandler("Category name is required", 400, res);
-    return SuccessHandler(await BlogCategory.create({ name }), 200, res, "Blog category created!");
-  } catch {
-    return ErrorHandler("Internal server error", 500, res);
-  }
-},
+    add: async (req, res) => {
+        const { name } = req.body;
+        try {
+            if (!name) return ErrorHandler('Category name is required', 400, res);
 
+            const blogs = await BlogCategory.create({ name: name });
+            return SuccessHandler(blogs, 200, res, `Blog category created!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
     edit: async (req, res) => {
-    try {
-      const { id } = req.params
-      const { name } = req.body
-      if (!id) return ErrorHandler("Id is required", 400, res)
+        const id = req.params.id;
+        const { name } = req.body;
+        console.log('id ===>',id)
+        try {
+            if (!id) return ErrorHandler('Id is required', 400, res);
 
-      const category = await BlogCategory.findById(id)
-      if (!category) return ErrorHandler("Category does not exist", 400, res)
+            const blogCategory = await BlogCategory.findById(id);
+            if (!blogCategory) return ErrorHandler('Category does not exist', 400, res);
+            
+            if(name) blogCategory.name = name;
+            await blogCategory.save();
 
-      if (name) category.name = name
-      await category.save()
+            return SuccessHandler(blogCategory, 200, res, `Blog category updated!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
-      return SuccessHandler(category, 200, res, "Blog category updated!")
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
-    }
-  },
-
- 
-  getAll: async (_, res) => {
-    try {
-      const categories = await BlogCategory.find().lean()
-      return SuccessHandler(categories, 200, res, "Blog categories retrieved!")
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
-    }
-  },
+    getAll: async (req, res) => {
+        try {
+console.log('getAll')
+            const blogs = await BlogCategory.find({});
+            return SuccessHandler(blogs, 200, res, `Blog categories retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
 
     get: async (req, res) => {
-    const { page = "1", q } = req.query
-    const pageNumber = Number.parseInt(page, 10)
-    const itemsPerPage = Number.parseInt(process.env.PAGE_SIZE || "6", 10)
+        const {page, q} = req.query;
+        const pageNumber = parseInt(page) || 1;
+        const itemsPerPage = 6;
+        const skip = (pageNumber - 1) * itemsPerPage;
 
-    // Input Validation
-    if (isNaN(pageNumber) || pageNumber < 1) {
-      return ErrorHandler("Invalid page number", 400, res)
-    }
+        try {
 
-    try {
-      // Sanitized search query
-      const searchQuery = q?.trim()
-        ? { name: { $regex: q.trim().replace(/[\\*+?^$().{}|[\]]/g, "\\$&"), $options: "i" } }
-        : {}
+            let query = {}
+            if(q) {
+                query = { name: { $regex: q, $options: "i" } }
+            }
+            console.log('query ===>',query)
 
-      // Combined query using $facet for performance
-      const pipeline = [
-        { $match: searchQuery },
-        {
-          $lookup: {
-            from: "blogs",
-            localField: "_id",
-            foreignField: "category",
-            as: "blogs",
-          },
-        },
-        { $addFields: { active: { $gt: [{ $size: "$blogs" }, 0] } } },
-        { $project: { name: 1, createdAt: 1, updatedAt: 1, active: 1 } },
-        {
-          $facet: {
-            data: [{ $skip: (pageNumber - 1) * itemsPerPage }, { $limit: itemsPerPage }],
-            total: [{ $count: "count" }],
-          },
-        },
-      ]
-
-      const result = await BlogCategory.aggregate(pipeline)
-      const data = result[0]?.data || []
-      const total = result[0]?.total[0]?.count || 0
-      const totalPages = Math.ceil(total / itemsPerPage)
-
-      return SuccessHandler({ blogCategories: data, totalPages }, 200, res, "Blog categories retrieved!")
-    } catch (error) {
-      console.error("[BlogCategory GET] Error:", error)
-      return ErrorHandler("Internal server error", 500, res)
-    }
+            const totalBlogCategories = await BlogCategory.countDocuments(query);
+            const totalPages = Math.ceil(totalBlogCategories / itemsPerPage);
+console.log('totalPages ===>',totalPages)
+            const blogCategories = await BlogCategory.aggregate([
+         ...(q
+        ? [{ $match: { name: { $regex: q.trim(), $options: "i" } } }]
+        : []),
+  {
+    $lookup: {
+      from: "blogs", // collection name of Blog model
+      localField: "_id",
+      foreignField: "category",
+      as: "blogs",
+    },
   },
-   getCategory: async (req, res) => {
-  try {
-    const { id } = req.params
-    if (!id) return ErrorHandler("Id is required", 400, res)
+  {
+    $addFields: {
+      active: { $gt: [{ $size: "$blogs" }, 0] }, // true if blogs exist
+    },
+  },
+  {
+    $project: {
+      name: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      active: 1,
+    },
+  },
+  { $skip: skip },
+  { $limit: itemsPerPage },
+]);
 
-    const [category] = await BlogCategory.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(id) } },
-      {
-        $lookup: {
-          from: "blogs",
-          localField: "_id",
-          foreignField: "category",
-          as: "blogs",
-        },
-      },
-      {
-        $addFields: {
-          total: { $size: "$blogs" },
-          active: { $gt: [{ $size: "$blogs" }, 0] },
-        },
-      },
-      {
-        $project: {
-          name: 1,
-          description: 1,
-          total: 1,
-          active: 1,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      },
-    ])
-    console.log('category ===>',category)
 
-    if (!category) return ErrorHandler("Category does not exist", 400, res)
+            return SuccessHandler({blogCategories, totalPages}, 200, res, `Blog categories retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
+    getCategory:async (req,res) => {
+        const id = req.params.id;
+        console.log('id ===>',id)
+        if(!id) return ErrorHandler('Id is required',400,res);
+        const category = await BlogCategory.aggregate([
+  // Match specific category
+  { $match: { _id: new mongoose.Types.ObjectId(id) } },
 
-    return SuccessHandler(category, 200, res, `Category with id:${id} retrieved`)
-  } catch (error) {
-    console.error("[getCategory] Error:", error)
-    return ErrorHandler("Internal server error", 500, res)
-  }
-},
+  // Lookup blogs
+  {
+    $lookup: {
+      from: "blogs",               // collection name of Blog model
+      localField: "_id",
+      foreignField: "category",    // reference field in Blog model
+      as: "blogs",
+    },
+  },
+
+  // Add total count + status
+  {
+    $addFields: {
+      total: { $size: "$blogs" },
+      active: { $gt: [{ $size: "$blogs" }, 0] }, // true if at least 1 blog
+    },
+  },
+
+  // Cleanup
+  {
+    $project: {
+      name: 1,
+      description: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      total: 1,
+      active: 1,
+    },
+  },
+]);
+console.log('category ====>',category)
+
+        if(!category.length) return ErrorHandler('Category does not exist',400,res);
+
+        return SuccessHandler(category[0],200,res,`category with id:${id} ,retrieved`)
+    },
+
 
     delete: async (req, res) => {
-    try {
-      const { id } = req.params
-      const { deleteConfirmed } = req.body
-      if (!id) return ErrorHandler("Id is required", 400, res)
+        const id = req.params.id; // This is presumably the category ID.
+        const { deleteConfirmed } = req.body;
+        console.log('deleteConfirmed ===>',deleteConfirmed)
+        console.log('req.body ===>',req.body)
+        
+        try {
+            if (!id) return ErrorHandler('Id is required', 400, res);
+    
+            const blogCategory = await BlogCategory.findById(id);
+            if (!blogCategory) return ErrorHandler('Category does not exist', 400, res);
+    
+            // Check if there are any blogs in this category
+            const blogsInCategory = await Blog.find({ category: id });
+            if (blogsInCategory.length > 0) {
+                if (deleteConfirmed === "Yes") {
+                    // If deletion is confirmed, delete all blogs in the category.
+                    for (const blog of blogsInCategory) {
+                        if (blog.image) {
+                            // Assuming deleteFile is a function that deletes the file and returns true/false.
+                            const deletedFile = deleteFile(blog.image, 'public/blog-images');
+                            if (!deletedFile) console.log(`Deletion Error: 'Blog #${blog._id}, image deletion failed!'`);
 
-      const [category, blogs] = await Promise.all([BlogCategory.findById(id), Blog.find({ category: id })])
-
-      if (!category) return ErrorHandler("Category does not exist", 400, res)
-
-      if (blogs.length > 0) {
-        if (deleteConfirmed !== "Yes") {
-          return ErrorHandler("This category contains some blogs", 200, res)
+                        }
+                        await Blog.findByIdAndDelete(blog._id);
+                    }
+                    // After deleting blogs, delete the category.
+                    await BlogCategory.findByIdAndDelete(id);
+                    return SuccessHandler(null, 200, res, `The category and All blogs with this category have been deleted.`);
+                } else {
+                    // If deleteConfirmed is not true, send a warning message.
+                    return ErrorHandler('This category contains some blogs', 200, res);
+                }
+            } else {
+                // If there are no blogs in the category, just delete the category.
+                await BlogCategory.findByIdAndDelete(id);
+                return SuccessHandler(null, 200, res, `Category deleted successfully.`);
+            }
+        } catch (error) {
+            console.error("Error in deletion:", error);
+            return ErrorHandler('Internal server error', 500, res);
         }
-
-        await Promise.all([
-          ...blogs.map((blog) => {
-            blog.image && deleteFile(blog.image, "public/blog-images")
-            return Blog.findByIdAndDelete(blog._id)
-          }),
-          BlogCategory.findByIdAndDelete(id),
-        ])
-
-        return SuccessHandler(null, 200, res, "Category and its blogs deleted successfully.")
-      }
-
-      await BlogCategory.findByIdAndDelete(id)
-      return SuccessHandler(null, 200, res, "Category deleted successfully.")
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
     }
-  }
+    
+
 };
 
 export default blogCategoryController;

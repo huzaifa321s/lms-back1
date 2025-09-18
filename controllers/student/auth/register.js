@@ -62,7 +62,7 @@ class StudentRegister extends Register {
             remainingEnrollmentCount: user.remainingEnrollmentCount,
             status: user.status,
             notifications: user.notifications,
-            subscription: await getStudentActivePlan(user.subscriptionId),
+            subscription:user.subscriptionId ? await getStudentActivePlan(user.subscriptionId) : null,
             enrolledCourses: [],
             customerId: user.customerId,
             createdAt: user.createdAt,

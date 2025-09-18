@@ -6,156 +6,123 @@ import SuccessHandler from "../../utils/functions/SuccessHandler.js";
 const gamesController = {
     // Training Wheel Game
     createTrainingWheelGame: async (req, res) => {
-  try {
-    const { user, body: { question, answer, answer_in_chunks, category, levels } } = req;
+        const { question, answer, answer_in_chunks, category, levels } = req.body;
 
-    // Inline input validation
-    if (!user || !question || !answer || !answer_in_chunks || !category || !levels) {
-      return ErrorHandler("Unauthorized or missing required fields", 401, res);
-    }
+        try {
 
-    await TrainingWheelGame.create({
-      question,
-      answer,
-      answer_in_chunks,
-      category,
-      difficulties: levels,
-      author: user._id,
-      user_type: "Teacher",
-    });
+            const gameObj = {
+                question,
+                answer,
+                answer_in_chunks,
+                category,
+                difficulties: levels,
+                author: req.user._id,
+                user_type: 'Teacher'
+            }
 
-    return SuccessHandler(null, 200, res, "Game created successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
-getTrainingWheelQuestions:async (req, res) => {
-  try {
-    const { user, query: { page = 1, q } } = req;
+            const game = new TrainingWheelGame(gameObj);
+            await game.save();
+            return SuccessHandler(null, 200, res, `Game added!`);
+        } catch (error) {
+            console.error("Error: ", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
-    // Inline input validation
-    if (!user) {
-      return ErrorHandler("Unauthorized or missing user", 401, res);
-    }
+    getTrainingWheelQuestions: async (req, res) => {
+        const { page, q } = req.query;
 
-    const limit = 10;
-    const skip = (page - 1) * limit;
-    const query = {
-      author: user._id,
-      user_type: "Teacher",
-      ...(q && { question: { $regex: q, $options: "i" } }),
-    };
+        const pageNumber = parseInt(page) || 1;
+        const itemsPerPage = 10; // Set a default page size of 10
+        const skip = (pageNumber - 1) * itemsPerPage;
 
-    // Fetch total count and games concurrently
-    const [totalGames, games] = await Promise.all([
-      TrainingWheelGame.countDocuments(query),
-      TrainingWheelGame.find(query)
-        .skip(skip)
-        .limit(limit)
-        .select("question category difficulties")
-        .populate("category", "name")
-        .lean(),
-    ]);
+        try {
 
-    return SuccessHandler(
-      { games, totalPages: Math.ceil(totalGames / limit) },
-      200,
-      res,
-      "Games retrieved successfully"
-    );
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
+            let query = {
+                author: req.user._id,
+                user_type: 'Teacher'
+            }
+            if (q) {
+                query = {
+                    ...query,
+                    question: { $regex: q, $options: "i" }
+                }
+            }
+
+            const totalGames = await TrainingWheelGame.countDocuments(query);
+            const totalPages = Math.ceil(totalGames / itemsPerPage);
+
+            const games = await TrainingWheelGame.find(query)
+                .skip(skip)
+                .limit(itemsPerPage)
+                .select('question category difficulties')
+                .populate('category')
+                .exec();
+
+            return SuccessHandler({ games, totalPages }, 200, res, `Games retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
 
 
+    deleteTWQuestion: async (req, res) => {
+        const id = req.params.id;
+        try {
+            const question = await TrainingWheelGame.findById(id);
+            if (!question) return ErrorHandler('Question does not exist', 400, res);
 
-    deleteTWQuestion:async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { user } = req;
-
-    // Inline input validation
-    if (!user || !id) {
-      return ErrorHandler("Unauthorized or missing question ID", 401, res);
-    }
-
-    const deleted = await TrainingWheelGame.findOneAndDelete({ _id: id, author: user._id });
-    if (!deleted) {
-      return ErrorHandler("Question not found or not authorized", 404, res);
-    }
-
-    return SuccessHandler(null, 200, res, "Question deleted successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
+            await TrainingWheelGame.findByIdAndDelete(id);
+            return SuccessHandler(null, 200, res, `Question deleted!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
 
-   getTWGame:async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { user } = req;
+    getTWGame: async (req, res) => {
+        const id = req.params.id;
+        try {
+            if (!id) return ErrorHandler('Id is required!', 400, res);
 
-    // Inline input validation
-    if (!user || !id) {
-      return ErrorHandler("Unauthorized or missing game ID", 401, res);
-    }
+            const game = await TrainingWheelGame.findById(id);
+            if (!game) return ErrorHandler('Question does not exist', 400, res);
 
-    const game = await TrainingWheelGame.findOne({ _id: id, author: user._id }).lean();
-    if (!game) {
-      return ErrorHandler("Game not found or not authorized", 404, res);
-    }
+            return SuccessHandler(game, 200, res, `Game with id: ${id}, retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
-    return SuccessHandler(game, 200, res, "Game retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
+    updateTrainingWheelGame: async (req, res) => {
+        const id = req.params.id;
+        const { question, answer, answer_in_chunks, category, levels } = req.body;
 
+        try {
 
-  updateTrainingWheelGame: async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { user, body: { question, answer, answer_in_chunks, category, levels } } = req;
+            if (!id) return ErrorHandler('Id is required', 400, res);
 
-    // Inline input validation
-    if (!user || !id) {
-      return ErrorHandler("Unauthorized or missing game ID", 401, res);
-    }
+            const game = await TrainingWheelGame.findById(id);
+            if (!game) return ErrorHandler('Game does not exist', 400, res);
 
-    // Prepare update object only with provided fields
-    const updateData = {
-      ...(question && { question }),
-      ...(answer && { answer }),
-      ...(answer_in_chunks && { answer_in_chunks }),
-      ...(category && { category }),
-      ...(levels && { difficulties: levels }),
-    };
+            if (question) game.question = question;
+            if (answer) game.answer = answer;
+            if (answer_in_chunks) game.answer_in_chunks = answer_in_chunks;
+            if (category) game.category = category;
+            if (levels) game.difficulties = levels;
 
-    // Only proceed if there's something to update
-    if (Object.keys(updateData).length === 0) {
-      return ErrorHandler("No valid fields provided for update", 400, res);
-    }
+            await game.save();
 
-    const updated = await TrainingWheelGame.findOneAndUpdate(
-      { _id: id, author: user._id },
-      updateData,
-      { new: true, runValidators: true }
-    ).lean();
-
-    if (!updated) {
-      return ErrorHandler("Game not found or not authorized", 404, res);
-    }
-
-    return SuccessHandler(updated, 200, res, "Game updated successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-}
-,
-
+            return SuccessHandler(null, 200, res, `Game updated!`);
+        } catch (error) {
+            console.error("Error: ", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
 }
 

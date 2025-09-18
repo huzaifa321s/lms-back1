@@ -11,330 +11,376 @@ import { deleteFile, saveFile } from "../../utils/functions/HelperFunctions.js";
 const allowedImageTypes = ["image/jpeg", "image/png", "image/gif"];
 
 const courseController = {
-create: async (req, res) => {
-  try {
-    const user = req.user;
-    const { name, description, category, material_length } = req.body;
-
-    if (!user) return ErrorHandler("Unauthorized - Please login first!", 401, res);
-    if (!name || !description || !category || !material_length) {
-      return ErrorHandler("All fields are required!", 400, res);
-    }
-
-    const teacher = await Teacher.findById(user._id);
-    if (!teacher) return ErrorHandler("Instructor not found!", 404, res);
-
-    // Generate random color for course
-    const randomColor = () =>
-      `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(
-        Math.random() * 255
-      )}, 1)`;
-
-    let courseObj = {
-      name,
-      description,
-      category,
-      instructor: teacher._id,
-      color: randomColor(),
-    };
-
-    // Handle cover image upload
-    if (req.files?.coverImage) {
-      const coverImageFile = req.files.coverImage;
-      if (!allowedImageTypes.includes(coverImageFile.mimetype)) {
-        return ErrorHandler("Invalid cover image type!", 400, res);
-      }
-      const uploadedImage = saveFile(coverImageFile, "public/courses/cover-images");
-      if (!uploadedImage) return ErrorHandler("Cover image upload failed!", 400, res);
-
-      courseObj.coverImage = uploadedImage;
-    }
-
-    // Handle course materials
-    const material = [];
-    const materialLength = parseInt(material_length, 10) || 0;
-
-    for (let i = 0; i < materialLength; i++) {
-      const title = req.body[`material[${i}][title]`];
-      const desc = req.body[`material[${i}][description]`];
-      const file = req.files?.[`material[${i}][media]`];
-
-      if (!file) return ErrorHandler(`Media file missing for material ${i + 1}`, 400, res);
-
-      const uploadedMedia = saveFile(file, "public/courses/material");
-      if (!uploadedMedia) return ErrorHandler("Media file upload failed!", 400, res);
-
-      material.push({
-        title,
-        description: desc,
-        type: file.mimetype.split("/")[0],
-        media: uploadedMedia,
-      });
-    }
-
-    courseObj.material = material;
-
-    // Save course & assign to teacher
-    const course = await Course.create(courseObj);
-    teacher.courses.push(course._id);
-    await teacher.save();
-
-    return SuccessHandler(null, 201, res, "Course created successfully!");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
-
-    edit: async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, description, category, material_length, removed_material_length } = req.body;
+    create: async (req, res) => { // ADD CATEGORY IN FRONT END
         const user = req.user;
+        const { name, description, category, material_length } = req.body;
+        try {
 
-        if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+            if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
 
-        const teacher = await Teacher.findById(user._id);
-        if (!teacher) return ErrorHandler('Instructor not found!', 404, res);
-
-        const course = await Course.findById(id);
-        if (!course) return ErrorHandler('Course not found!', 404, res);
-
-        if (course.instructor.toString() !== user._id.toString()) {
-            return ErrorHandler('Only course owner can edit the course!', 400, res);
-        }
-
-        // Update basic details
-        Object.assign(course, { name, category, description });
-
-        // Handle cover image update
-        if (req.files?.coverImage) {
-            const coverImageFile = req.files.coverImage;
-            if (!allowedImageTypes.includes(coverImageFile.mimetype)) {
-                return ErrorHandler('Invalid image type!', 400, res);
+            if (!name || !description || !category || !material_length) {
+                return ErrorHandler('Provide all fields are required!', 400, res);
             }
-            const uploadedImage = saveFile(coverImageFile, 'public/courses/cover-images');
-            if (!uploadedImage) return ErrorHandler('Uploading cover image failed!', 400, res);
 
-            if (course.coverImage) deleteFile(course.coverImage, 'public/courses/cover-images');
-            course.coverImage = uploadedImage;
-        }
+            const teacher = await Teacher.findById(user._id);
+            if (!teacher) return ErrorHandler('Instructor not found!', 404, res);
 
-        // Handle material update/new addition
-        const newMaterials = [];
-        for (let i = 0; i < Number(material_length); i++) {
-            const matId = req.body[`material[${i}][_id]`];
-            const title = req.body[`material[${i}][title]`];
-            const desc = req.body[`material[${i}][description]`];
-            const file = req.files?.[`material[${i}][media]`];
+            // Generating color to specifiy the course (dounut chart)
+            const r = Math.floor(Math.random() * 255);
+            const g = Math.floor(Math.random() * 255);
+            const b = Math.floor(Math.random() * 255);
 
-            if (matId) {
-                const materialIndex = course.material.findIndex(m => m._id.toString() === matId);
-                if (materialIndex === -1) return ErrorHandler('Material not found!', 400, res);
+            let courseObj = {
+                name,
+                description,
+                category,
+                instructor: teacher._id,
+                color: `rgba(${r}, ${g}, ${b}, 1)`
+            }
 
-                Object.assign(course.material[materialIndex], { title, description: desc });
-
-                if (file) {
-                    const uploadMedia = saveFile(file, "public/courses/material");
-                    if (!uploadMedia) return ErrorHandler('Media file uploading failed!', 400, res);
-
-                    if (course.material[materialIndex].media) {
-                        deleteFile(course.material[materialIndex].media, 'public/courses/material');
-                    }
-
-                    Object.assign(course.material[materialIndex], {
-                        type: file.mimetype.split("/")[0],
-                        media: uploadMedia
-                    });
+            if (req.files && req.files.coverImage) {
+                const coverImageFile = req.files.coverImage;
+                if (!allowedImageTypes.includes(coverImageFile.mimetype)) {
+                    return ErrorHandler('Invalid image type!', 400, res);
                 }
-            } else {
+                const uploadedImage = saveFile(coverImageFile, 'public/courses/cover-images');
+                if (!uploadedImage) return ErrorHandler('Uploading cover image failed!', 400, res);
+                courseObj = { ...courseObj, coverImage: uploadedImage };
+            }
+
+            // Handling Course Material
+            let material = [];
+            const materialLength = Number(material_length);
+            for (var i = 0; i < materialLength; i++) {
+                const title = req.body[`material[${i}][title]`];
+                const description = req.body[`material[${i}][description]`];
+
+                let file = req.files[`material[${i}][media]`];
                 if (!file) return ErrorHandler('Some media file is must!', 400, res);
+
                 const uploadMedia = saveFile(file, "public/courses/material");
                 if (!uploadMedia) return ErrorHandler('Media file uploading failed!', 400, res);
 
-                newMaterials.push({
+                const materialObj = {
                     title,
-                    description: desc,
+                    description,
                     type: file.mimetype.split("/")[0],
                     media: uploadMedia
-                });
+                };
+
+                material.push(materialObj);
             }
+
+            courseObj = { ...courseObj, material };
+            const course = await Course.create(courseObj)
+
+            teacher.courses.push(course._id);
+          
+
+            return SuccessHandler(null, 200, res, `Course created!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
         }
-        course.material.push(...newMaterials);
 
-        // Handle removed materials
-        for (let i = 0; i < Number(removed_material_length); i++) {
-            const id = req.body[`removed_material[${i}][_id]`];
-            const media = req.body[`removed_material[${i}][media]`];
+    },
 
-            deleteFile(media, 'public/courses/material');
-            course.material = course.material.filter(m => m._id.toString() !== id);
+    edit: async (req, res) => {
+        const id = req.params.id;
+        const user = req.user;
+        const { name, description, category, material_length, removed_material_length ,material} = req.body;
+        try {
+            if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+
+            // Check if the user is an instructor
+            const teacher = await Teacher.findById(user._id);
+            if (!teacher) return ErrorHandler('Instructor not found!', 404, res);
+
+            // Find the course by ID
+            const course = await Course.findById(id);
+            if (!course) return ErrorHandler('Course not found!', 404, res);
+
+            // Check if the user is the instructor of the course
+            if (course.instructor.toString() !== user._id.toString()) {
+                return ErrorHandler('Only course owner can edit the course!', 400, res);
+            }
+
+            // Update course name, category or desc provided.
+            course.name = name;
+            course.category = category;
+            course.description = description;
+
+            // Update cover image (if provided)
+            if (req.files && req.files.coverImage) {
+                const coverImageFile = req.files.coverImage;
+                if (!allowedImageTypes.includes(coverImageFile.mimetype)) {
+                    return ErrorHandler('Invalid image type!', 400, res);
+                }
+                const uploadedImage = saveFile(coverImageFile, 'public/courses/cover-images');
+                if (!uploadedImage) return ErrorHandler('Uploading cover image failed!', 400, res);
+                // Delete previous cover image if exists
+                if (course.coverImage) {
+                    const deletedFile = deleteFile(course.coverImage, 'public/courses/cover-images');
+                    if (!deletedFile) console.log("Deletion Error: 'Some error occured while deleting course cover image!'");
+                }
+                course.coverImage = uploadedImage;
+            }
+
+
+            const newMaterials = [];
+            const materialLength = Number(material_length);
+            for (var i = 0; i < materialLength; i++) {
+                const id = req.body[`material[${i}][_id]`];
+                if (id) {
+                    const title = req.body[`material[${i}][title]`];
+                    const description = req.body[`material[${i}][description]`];
+
+                    let file = null;
+                    if (req.files && req.files[`material[${i}][media]`]) {
+                        file = req.files[`material[${i}][media]`];
+                    }
+
+                    const materialIndex = course.material.findIndex(m => m._id.toString() === id.toString());
+                    if (materialIndex === -1) return ErrorHandler('Material not found!', 400, res);
+
+                    course.material[materialIndex].title = title;
+                    course.material[materialIndex].description = description;
+
+                    if (file) {
+                        const uploadMedia = saveFile(file, "public/courses/material");
+                        if (!uploadMedia) return ErrorHandler('Media file uploading failed!', 400, res);
+
+                        if (course.material[materialIndex].media) {
+                            const deletedFile = deleteFile(course.material[materialIndex].media, 'public/courses/material');
+                            if (!deletedFile) console.log("Deletion Error: 'Some error occured while deleting course material image!'");
+                        }
+
+                        course.material[materialIndex].type = file.mimetype.split("/")[0];
+                        course.material[materialIndex].media = uploadMedia;
+                    }
+                } else {
+                    const title = req.body[`material[${i}][title]`];
+                    const description = req.body[`material[${i}][description]`];
+                  
+                    let file = req.files[`material[${i}][media]`];
+                    if (!file) return ErrorHandler('Some media file is must!', 400, res);
+
+                    const uploadMedia = saveFile(file, "public/courses/material");
+                    if (!uploadMedia) return ErrorHandler('Media file uploading failed!', 400, res);
+
+                    const materialObj = {
+                        title,
+                        description,
+                        type: file.mimetype.split("/")[0],
+                        media: uploadMedia
+                    };
+                    newMaterials.push(materialObj);
+                }
+
+            }
+
+            // Concat the new added material in previous
+            course.material = course.material.concat(newMaterials);
+
+            // Remove the material (if ask for)
+            const removedMaterialLength = Number(removed_material_length);
+            if (removedMaterialLength > 0) {
+                const removeMaterialIds = [];
+                for (var i = 0; i < removedMaterialLength; i++) {
+                    const id = req.body[`removed_material[${i}][_id]`];
+                    const media = req.body[`removed_material[${i}][media]`];
+
+                    const deletedFile = deleteFile(media, 'public/courses/material');
+                    if (!deletedFile) console.log("Deletion Error: 'Some error occured while deleting course material image!");
+                    removeMaterialIds.push(id);
+                }
+                course.material = course.material.filter((m) => !removeMaterialIds.includes(m._id.toString()));
+            }
+            await course.save();
+
+            return SuccessHandler(null, 200, res, `Course updated!`);
+        } catch (error) {
+            console.error("Error updating course:", error);
+            return ErrorHandler('Internal server error', 500, res);
         }
-
-        await course.save();
-        return SuccessHandler(null, 200, res, `Course updated!`);
-    } catch (error) {
-        console.error("Error updating course:", error);
-        return ErrorHandler('Internal server error', 500, res);
-    }
-},
+    },
 
     delete: async (req, res) => {
-  try {
-    const { id } = req.params;
-    const user = req.user;
-    if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+        const id = req.params.id;
+        try {
+            const user = req.user;
+            if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
 
-    const course = await Course.findById(id);
-    if (!course) return ErrorHandler('Course not found!', 404, res);
+            const course = await Course.findById(id);
+            if (!course) return ErrorHandler('Course not found!', 404, res);
 
-    if (course.instructor.toString() !== user._id.toString())
-      return ErrorHandler('Only course owner can delete the course!', 400, res);
+            if (course.instructor.toString() !== user._id.toString()) {
+                return ErrorHandler('Only course owner can delete the course!', 400, res);
+            }
 
-    if (!(await Teacher.findById(user._id)))
-      return ErrorHandler('Instructor not found!', 404, res);
+            const teacher = await Teacher.findById(user._id);
+            if (!teacher) return ErrorHandler('Instructor not found!', 404, res);
 
-    if (course.coverImage)
-      deleteFile(course.coverImage, 'public/courses/cover-images');
+            if (course.coverImage) {
+                const deletedFile = deleteFile(course.coverImage, 'public/courses/cover-images');
+                if (!deletedFile) console.log("Deletion Error: 'Some error occured while deleting course cover image!'");
 
-    course.material.forEach(m =>
-      deleteFile(m.media, 'public/courses/material')
-    );
+            }
 
-    await Course.findByIdAndDelete(id);
+            course.material.forEach((m) => {
+                const deletedFile = deleteFile(m.media, 'public/courses/material');
+                if (!deletedFile) console.log("Deletion Error: 'Some error occured while deleting media file!'");
+            });
 
-    return SuccessHandler(null, 200, res, 'Course deleted!');
-  } catch (err) {
-    console.error('Error:', err);
-    return ErrorHandler('Internal server error', 500, res);
-  }
-},
+            await Course.findByIdAndDelete(id);
 
-
-   get: async (req, res) => {
-  try {
-    if (!req.user) return ErrorHandler('Unauthorized - Login first!', 400, res);
-
-    const { page = 1, q } = req.query;
-    const itemsPerPage = 10;
-    const skip = (page - 1) * itemsPerPage;
-
-    // query banate waqt condition short kar di
-    const query = q
-      ? { name: { $regex: q, $options: 'i' } }
-      : { instructor: req.user._id };
-
-    const totalCourses = await Course.countDocuments(query);
-    const totalPages = Math.ceil(totalCourses / itemsPerPage);
-
-    const courses = await Course.find(query)
-      .skip(skip)
-      .limit(itemsPerPage)
-      .lean();
-
-    // studentsEnrolled add karne ke liye map + Promise.all use
-    const courseList = await Promise.all(
-      courses.map(async c => ({
-        ...c,
-        studentsEnrolled: await EnrolledCourses.countDocuments({ course: c._id })
-      }))
-    );
-
-    return SuccessHandler({ courses: courseList, totalPages }, 200, res, 'Courses retrieved!');
-  } catch (err) {
-    console.error('Error:', err);
-    return ErrorHandler('Internal server error', 500, res);
-  }
-},
-
-
-  getCourse:async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { user } = req;
-
-    // Inline input validation
-    if (!user || !id) {
-      return ErrorHandler("Unauthorized or missing course ID", 401, res);
-    }
-
-    // Fetch course and enrolled count concurrently
-    const [course, studentsEnrolled] = await Promise.all([
-      Course.findById(id).lean(),
-      EnrolledCourses.countDocuments({ course: id }),
-    ]);
-    if (!course) return ErrorHandler("Course not found", 404, res);
-
-    course.studentsEnrolled = studentsEnrolled;
-
-    return SuccessHandler(course, 200, res, "Course retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
-
-
-  getCourseStudents:async (req, res) => {
-  try {
-    const { page = 1, courseId, q } = req.query;
-
-    // Inline input validation
-    if (!courseId) {
-      return ErrorHandler("Missing course ID", 400, res);
-    }
-
-    const itemsPerPage = 8;
-    const skip = (page - 1) * itemsPerPage;
-
-    // Build search query
-    const query = q
-      ? {
-          $and: q.split(' ').map(term => ({
-            $or: [
-              { 'student.firstName': { $regex: term, $options: 'i' } },
-              { 'student.lastName': { $regex: term, $options: 'i' } },
-            ],
-          })),
+            return SuccessHandler(null, 200, res, `Course deleted!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
         }
-      : {};
+    },
 
-    // Fetch total count and enrolled students concurrently
-    const [totalEnrolledStudents, enrolledStudents] = await Promise.all([
-      EnrolledCourses.countDocuments({ course: courseId }),
-      EnrolledCourses.aggregate([
-        { $match: { course: new mongoose.Types.ObjectId(courseId) } },
-        {
-          $lookup: {
-            from: 'students',
-            localField: 'student',
-            foreignField: '_id',
-            as: 'student',
-          },
-        },
-        { $unwind: '$student' },
-        {
-          $addFields: {
-            student: {
-              firstName: '$student.firstName',
-              lastName: '$student.lastName',
-              email: '$student.email',
-            },
-          },
-        },
-        { $match: query },
-        { $project: { 'student.firstName': 1, 'student.lastName': 1, 'student.email': 1 } },
-        { $skip: skip },
-        { $limit: itemsPerPage },
-      ]),
-    ]);
+    get: async (req, res) => {
+        const { page, q } = req.query;
 
-    const totalPages = Math.ceil(totalEnrolledStudents / itemsPerPage);
+        const pageNumber = parseInt(page) || 1;
+        const itemsPerPage = 10; // Set a default page size of 10
+        const skip = (pageNumber - 1) * itemsPerPage;
 
-    return SuccessHandler({ enrolledStudents, totalPages }, 200, res, "Students retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-}
+        try {
+            if (!req.user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+            const teacherId = req.user._id;
 
+            let query = { instructor: teacherId }
+
+            if (q) {
+                query = { name: { $regex: q, $options: "i" } }
+            }
+
+            const totalBlogs = await Course.countDocuments(query);
+            const totalPages = Math.ceil(totalBlogs / itemsPerPage);
+
+            // const course = await Course.find(query).skip(skip).limit(itemsPerPage).populate("category").exec();
+            const courses = await Course.find(query).skip(skip).limit(itemsPerPage).lean();
+
+            const courseList = [];
+            for (const c of courses) {
+                const courseAlongStdCount = {
+                    ...c,
+                    studentsEnrolled: await EnrolledCourses.countDocuments({ course: c._id })
+                }
+                courseList.push(courseAlongStdCount);
+            }
+
+            return SuccessHandler({ courses: courseList, totalPages }, 200, res, `Courses retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
+
+    getCourse: async (req, res) => {
+        const id = req.params.id;
+        try {
+            const user = req.user;
+            if (!user) return ErrorHandler('Unauthorized - Login first!', 400, res);
+
+            if (!id) return ErrorHandler('Id is required!', 400, res);
+
+            let course = await Course.findById(id).lean();
+
+            course = {
+                ...course,
+                studentsEnrolled: await EnrolledCourses.find({ course: id }).populate('student')
+            }
+console.log('course ====>',course)
+            return SuccessHandler(course, 200, res, `Course with id: ${id}, retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
+
+    getCourseStudents: async (req, res) => {
+        const { page, courseId, q } = req.query;
+
+        const pageNumber = parseInt(page) || 1;
+        const itemsPerPage = 6; // Set a default page size of 8
+        const skip = (pageNumber - 1) * itemsPerPage;
+        console.log('page ===>',page)
+
+        try {
+
+            let query = {}
+            if (q) {
+                let conditions = [];
+                const searchTerms = q.split(" ");
+                searchTerms.forEach(term => {
+                    const condition = {
+                        $or: [
+                            { "student.firstName": { $regex: term, $options: "i" } },
+                            { "student.lastName": { $regex: term, $options: "i" } }
+                        ]
+                    };
+                    conditions.push(condition);
+                });
+
+                if (conditions.length !== 0) {
+                    query = { $and: conditions };
+                }
+            }
+
+            const totalEnrolledStudents = await EnrolledCourses.countDocuments({
+                course: courseId
+            });
+console.log('totalEnrolledStudents ===>',totalEnrolledStudents)
+            const totalPages = Math.ceil(totalEnrolledStudents / itemsPerPage);
+
+            const enrolledStudents = await EnrolledCourses.aggregate([
+                // Extract only courses with the given id
+                { $match: { course: new mongoose.Types.ObjectId(courseId) } },
+                // Perform a left outer join with the 'students' collection
+                {
+                    $lookup: {
+                        from: 'students',
+                        localField: 'student',
+                        foreignField: '_id',
+                        as: 'student'
+                    }
+                },
+                // Deconstruct the array field 'student' to output a document for each element
+                { $unwind: "$student" },
+                // Add specific fields to the student document
+                {
+                    $addFields: {
+                        "student.firstName": "$student.firstName",
+                        "student.lastName": "$student.lastName",
+                        "student.email": "$student.email"
+                    }
+                },
+                // Filter documents based on the search query
+                { $match: query },
+                // Project only the necessary fields
+                {
+                    $project: {
+                        "student.firstName": 1,
+                        "student.lastName": 1,
+                        "student.email": 1
+                    }
+                },
+                // Skip the specified number of documents
+                { $skip: skip },
+                // Limit the number of documents returned
+                { $limit: itemsPerPage },
+            ]);
+            
+            return SuccessHandler({ enrolledStudents, totalPages }, 200, res, `Students retrieved!`);
+        } catch (error) {
+            console.error("Error retrieving:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    }
 
 
 

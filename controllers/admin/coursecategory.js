@@ -7,168 +7,179 @@ import mongoose from "mongoose";
 
 
 const courseCategoryController = {
-add:  async (req, res) => {
-    try {
-      const { name, description } = req.body
 
-      if (!name || !name.trim()) return ErrorHandler("Category name required", 400, res)
+    add: async (req, res) => {
+        const { name } = req.body;
+        try {
+            if (!name) return ErrorHandler('Category name is required', 400, res);
 
-      if (await CourseCategory.exists({ name: name.trim() })) {
-        return ErrorHandler("Category already exists", 400, res)
-      }
-
-      const newCategory = await CourseCategory.create({
-        name: name.trim(),
-        description: description?.trim() || "",
-      })
-
-      return SuccessHandler(newCategory, 201, res, "Course category created")
-    } catch {
-      return ErrorHandler("Failed to create category", 500, res)
-    }
-  },
-
-    edit:  async (req, res) => {
-    try {
-      const { id } = req.params
-      const { name, description } = req.body
-
-      if (!id) return ErrorHandler("Category ID is required!", 400, res)
-
-      const courseCategory = await CourseCategory.findById(id)
-      if (!courseCategory) return ErrorHandler("Category not found!", 404, res)
-
-      // Duplicate check only if name changed
-      if (name && name.trim() !== courseCategory.name) {
-        if (await CourseCategory.exists({ name: name.trim() })) {
-          return ErrorHandler("Category with this name already exists!", 400, res)
+            const courses = await CourseCategory.create({ name: name });
+            return SuccessHandler(courses, 200, res, `Course category created!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
         }
-        courseCategory.name = name.trim()
-      }
+    },
 
-      // Optional description update
-      if (description !== undefined) {
-        courseCategory.description = description
-      }
+    edit: async (req, res) => {
+        const id = req.params.id;
+        const { name } = req.body;
+        try {
+            if (!id) return ErrorHandler('Id is required', 400, res);
 
-      await courseCategory.save()
-      return SuccessHandler(courseCategory, 200, res, "Course category updated!")
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
-    }
-  },
+            const courseCategory = await CourseCategory.findById(id);
+            if (!courseCategory) return ErrorHandler('Category does not exist', 400, res);
+
+            if (name) courseCategory.name = name;
+            await courseCategory.save();
+
+            return SuccessHandler(courseCategory, 200, res, `Course category updated!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
     get: async (req, res) => {
-    try {
-      const { page = 1, q } = req.query
-      const pageNumber = Number.parseInt(page, 10) || 1
-      const itemsPerPage = 8
-      const skip = (pageNumber - 1) * itemsPerPage
+        const { page, q } = req.query;
 
-      const matchStage = q ? { name: { $regex: q.trim(), $options: "i" } } : {}
+        const pageNumber = parseInt(page) || 1;
+        const itemsPerPage = 6; // Set a default page size of 10
+        const skip = (pageNumber - 1) * itemsPerPage;
 
-      const [totalCategories, courseCategories] = await Promise.all([
-        CourseCategory.countDocuments(matchStage),
-        CourseCategory.aggregate([
-          { $match: matchStage },
-          {
-            $lookup: {
-              from: "courses",
-              localField: "_id",
-              foreignField: "category",
-              as: "courses",
-            },
-          },
-          {
-            $addFields: {
-              totalCourses: { $size: "$courses" },
-              active: { $gt: [{ $size: "$courses" }, 0] },
-            },
-          },
-          {
-            $project: {
-              name: 1,
-              createdAt: 1,
-              updatedAt: 1,
-              totalCourses: 1,
-              active: 1,
-            },
-          },
-          { $skip: skip },
-          { $limit: itemsPerPage },
-        ]),
-      ])
+        try {
 
-      const totalPages = Math.ceil(totalCategories / itemsPerPage)
-      return SuccessHandler(
-        { courseCategories, totalPages, currentPage: pageNumber },
-        200,
-        res,
-        "Course categories retrieved!",
-      )
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
-    }
+            let query = {}
+            if (q) {
+                query = { name: { $regex: q, $options: "i" } }
+            }
+
+            const totalCoursesCategories = await CourseCategory.countDocuments(query);
+            const totalPages = Math.ceil(totalCoursesCategories / itemsPerPage);
+const courseCategories = await CourseCategory.aggregate([
+  // Search/filter
+  ...(q ? [{ $match: { name: { $regex: q, $options: "i" } } }] : []),
+
+  // Lookup courses for each category
+  {
+    $lookup: {
+      from: "courses",
+      localField: "_id",
+      foreignField: "category", // NOT categoryId, should match your Course model
+      as: "courses",
+    },
   },
+  // Lookup enrolled courses for each category's courses
+  {
+    $lookup: {
+      from: "enrolledcourses",
+      let: { courseIds: "$courses._id" },
+      pipeline: [
+        { $match: { $expr: { $in: ["$course", "$$courseIds"] } } },
+      ],
+      as: "enrolled",
+    },
+  },
+  // Add counts and active flag
+  {
+    $addFields: {
+      totalCourses: { $size: "$courses" },
+      totalEnrolled: { $size: "$enrolled" },
+      active: { $gt: [{ $size: "$enrolled" }, 0] }, // true if at least 1 enrolled
+    },
+  },
+  // Projection for only required fields
+  {
+    $project: {
+      name: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      totalCourses: 1,
+      active: 1,
+    },
+  },
+  // Pagination
+  { $skip: skip },
+  { $limit: itemsPerPage },
+]);
+
+console.log('courseCategories ===>',courseCategories)
+
+            return SuccessHandler({ courseCategories, totalPages }, 200, res, `Course categories retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
     getAll: async (_, res) => {
         try {
 
-            const courses = await CourseCategory.find().lean();
+            const courses = await CourseCategory.find();
             return SuccessHandler(courses, 200, res, `Course categories retrieved!`);
         } catch (error) {
             console.error("Error:", error);
             return ErrorHandler('Internal server error', 500, res);
         }
     },
-    getCategory:async (req, res) => {
-    try {
-      const { id } = req.params
-      if (!id) return ErrorHandler("ID is required", 400, res)
+    getCategory:async (req,res) =>{
+        const id = req.params.id;
+      try{
+        if(!id) return ErrorHandler("ID is required",400,res);
 
-      const [category] = await CourseCategory.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(id) } },
-      {
-        $lookup: {
-          from: "courses",
-          localField: "_id",
-          foreignField: "categoryId",
-          as: "courses",
-        },
-      },
-      {
-        $addFields: {
-          totalCourses: { $size: "$courses" },
-          active: { $gt: [{ $size: "$courses" }, 0] },
-        },
-      },
-      {
-        $project: {
-          name: 1,
-          description: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          total: 1,
-          active: 1,
-        },
-      },
-    ]);
-      console.log('category ==>',category)
-
-      if (!category) return ErrorHandler("Category does not exist", 400, res)
-
-      const formatted = {
-        ...category,
-        createdAt: category.createdAt?.toISOString(),
-        updatedAt: category.updatedAt?.toISOString(),
-        description: category.description || null,
-      }
-
-      return SuccessHandler(formatted, 200, res, "Course category fetched successfully!")
-    } catch {
-      return ErrorHandler("Internal server error", 500, res)
-    }
+    const [category] = await CourseCategory.aggregate([
+  { $match: { _id: new mongoose.Types.ObjectId(id) } },
+  {
+    $lookup: {
+      from: "courses",
+      localField: "_id",
+      foreignField: "category", // NOTE: yahan "category" hona chahiye
+      as: "courses",
+    },
   },
+  {
+    $lookup: {
+      from: "enrolledcourses",
+      let: { courseIds: "$courses._id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $in: ["$course", "$$courseIds"] }, // course field in enrolledcourses
+          },
+        },
+      ],
+      as: "enrolled",
+    },
+  },
+  {
+    $addFields: {
+      total: { $size: "$courses" },
+      totalEnrolled: { $size: "$enrolled" },
+      active: { $gt: [{ $size: "$enrolled" }, 0] }, // true if any enrolled
+    },
+  },
+  {
+    $project: {
+      name: 1,
+      description: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      total: 1,
+      totalEnrolled: 1,
+      active: 1,
+      enrolled: 1, // Debug ke liye
+    },
+  },
+]);
+console.log('category ==>',category)
+
+        if(!category) return ErrorHandler('Category does not exists',400,res);
+        return SuccessHandler(category,200,res,'Course category fetched successfully');
+       
+      }catch(error){
+        console.log('error',error);
+      }
+    },
     delete: async (req, res) => {
         const id = req.params.id; // This is presumably the category ID.
         const { deleteConfirmed } = req.body;

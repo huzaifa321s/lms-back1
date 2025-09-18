@@ -4,13 +4,14 @@ import ErrorHandler from "../../utils/functions/ErrorHandler.js";
 
 const gameCategoryController = {
     getAll: async (_, res) => {
-  try {
-    const categories = await GameCategory.find().lean();
-    return SuccessHandler(categories, 200, res, "Game categories retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
+        try {
+            const allGameCategories = await GameCategory.find();
+            return SuccessHandler(allGameCategories, 200, res, `Game categories retrieved!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
 
 };

@@ -7,104 +7,144 @@ import SuccessHandler from "../../utils/functions/SuccessHandler.js";
 
 const dashboardController = {
 
-getCards: async (req, res) => {
-  try {
-    const { user } = req;
+    getCards: async (req, res) => {
+        try {
+            const lastWeekStartDate = moment().subtract(1, 'weeks').startOf('week');
 
-    // Inline input validation
-    if (!user) {
-      return ErrorHandler("Unauthorized or missing user", 401, res);
-    }
+            let courseIds = await Course.find({ instructor: req.user._id }, { _id: 1 }).lean().exec();
+            courseIds = courseIds.map(c => c._id);
 
-    const lastWeekStartDate = moment().subtract(1, 'weeks').startOf('week');
-    const courseIds = (await Course.find({ instructor: user._id }, { _id: 1 }).lean()).map(c => c._id);
+            const myCoursesCount = courseIds.length;
 
-    // Fetch counts and wallet concurrently
-    const [enrolledStudentsCount, studentsEnrolledThisWeek, teacherWallet] = await Promise.all([
-      EnrolledCourses.distinct('student', { course: { $in: courseIds } }).then(s => s.length),
-      EnrolledCourses.distinct('student', {
-        course: { $in: courseIds },
-        createdAt: { $gte: lastWeekStartDate },
-      }).then(s => s.length),
-      TeacherWallet.findOne({ teacher: user._id }, 'points').lean(),
-    ]);
+            const enrolledStudentsCount = await EnrolledCourses.distinct('student', {
+                course: {
+                    $in: courseIds
+                }
+            }).then(students => students.length);
 
-    return SuccessHandler({
-      points: teacherWallet?.points || 0,
-      myCoursesCount: courseIds.length,
-      enrolledStudentsCount,
-      studentsEnrolledThisWeek,
-    }, 200, res, "Cards retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
+            const studentsEnrolledThisWeek = await EnrolledCourses.distinct('student', {
+                course: { $in: courseIds },
+                createdAt: { $gte: lastWeekStartDate }
+            }).then(students => students.length);
 
+            const teacherWallet = await TeacherWallet.findOne({ teacher: req.user._id }).lean().exec();
+            const points = teacherWallet?.points || 0;
+
+            return SuccessHandler({ points, myCoursesCount, enrolledStudentsCount, studentsEnrolledThisWeek }, 200, res, `Got cards!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
 
     coursesByStudents: async (req, res) => {
-  try {
-    const { user } = req;
+        try {
+            const courses = await Course.find({
+                instructor: req.user._id
+            }).lean().exec();
 
-    // Inline input validation
-    if (!user) {
-      return ErrorHandler("Unauthorized or missing user", 401, res);
+            const courseLabels = courses.map((c) => c.name);
+
+            const studentsCount = [];
+            for (const c of courses) {
+                const distinctStudents = await EnrolledCourses.distinct('student', { course: c._id });
+                studentsCount.push(distinctStudents.length);
+            }
+        
+            const borderColor = courses.map((c) => c.color);
+            const backgroundColor = courses.map((c) => c.color.replace('1)', '0.8)'));
+            const dounutData = { courseLabels, studentsCount, borderColor, backgroundColor };
+       console.log('dounutData ====>',dounutData)
+            return SuccessHandler(dounutData, 200, res, `Course by Students!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
+
+    monthlyEnrolledStudents: async (req, res) => {
+        try {
+            const sixMonthsAgo = moment().subtract(6, 'months').startOf('month').toDate();
+
+            let courseIds = await Course.find({
+                instructor: req.user._id
+            }, {
+                _id: 1
+            }).lean().exec();
+
+            courseIds = courseIds.map(c => c._id);
+
+            const enrollCountByMonth = await EnrolledCourses.aggregate([
+                {
+                    $match: {
+                        course: {
+                            $in: courseIds
+                        },
+                        createdAt: {
+                            $gte: sixMonthsAgo
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            month: {
+                                $month: "$createdAt"
+                            },
+                            year: {
+                                $year: "$createdAt"
+                            },
+                            student: "$student"
+                        },
+                        studentsCount: {
+                            $sum: 1
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            month: "$_id.month",
+                            year: "$_id.year"
+                        },
+                        studentsCount: {
+                            $sum: 1
+                        }
+                    }
+                },
+                {
+                    $sort: {
+                        "_id.year": 1,
+                        "_id.month": 1
+                    }
+                }
+            ]);
+
+            // Get the past six months' names and initialize monthlyCounts
+            const pastSixMonths = [];
+            const monthlyCounts = [];
+
+            for (let i = 5; i >= 0; i--) {
+                const date = moment().subtract(i, 'months');
+                pastSixMonths.push(date.format('MMMM YYYY')); // Format month name and year
+                monthlyCounts.push(0); // Initialize with 0
+            }
+
+            enrollCountByMonth.forEach(item => {
+                const i = pastSixMonths.findIndex(m => {
+                    const [month, year] = m.split(' ');
+                    return moment.months().indexOf(month) + 1 === item._id.month && parseInt(year) === item._id.year;
+                });
+
+                if (i !== -1) monthlyCounts[i] = item.studentsCount;
+            });
+
+            return SuccessHandler({ monthlyCounts, pastSixMonths }, 200, res, `Student enrollment by month!`);
+        } catch (error) {
+            console.error("Error:", error);
+            return ErrorHandler('Internal server error', 500, res);
+        }
     }
-
-    // Fetch courses and student counts concurrently
-    const courses = await Course.find({ instructor: user._id }, 'name color').lean();
-    const studentsCount = await Promise.all(
-      courses.map(c => EnrolledCourses.distinct('student', { course: c._id }).then(s => s.length))
-    );
-
-    // Prepare donut chart data
-    const donutData = {
-      courseLabels: courses.map(c => c.name),
-      studentsCount,
-      borderColor: courses.map(c => c.color),
-      backgroundColor: courses.map(c => c.color.replace('1)', '0.8)')),
-    };
-
-    return SuccessHandler(donutData, 200, res, "Courses by students retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
-
-  monthlyEnrolledStudents: async (req, res) => {
-  try {
-    const { user } = req;
-
-    // Inline input validation
-    if (!user) {
-      return ErrorHandler("Unauthorized or missing user", 401, res);
-    }
-
-    const sixMonthsAgo = moment().subtract(6, 'months').startOf('month').toDate();
-    const courseIds = (await Course.find({ instructor: user._id }, '_id').lean()).map(c => c._id);
-
-    // Aggregate enrollment counts by month
-    const enrollCountByMonth = await EnrolledCourses.aggregate([
-      { $match: { course: { $in: courseIds }, createdAt: { $gte: sixMonthsAgo } } },
-      { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, studentsCount: { $addToSet: '$student' } } },
-      { $project: { _id: 1, studentsCount: { $size: '$studentsCount' } } },
-      { $sort: { '_id.year': 1, '_id.month': 1 } },
-    ]);
-
-    // Generate past 6 months labels and counts
-    const pastSixMonths = [...Array(6)].map((_, i) => moment().subtract(5 - i, 'months').format('MMMM YYYY'));
-    const monthlyCounts = pastSixMonths.map(m => {
-      const [monthName, year] = m.split(' ');
-      const monthIdx = moment().month(monthName).month() + 1;
-      const found = enrollCountByMonth.find(e => e._id.month === monthIdx && e._id.year === +year);
-      return found ? found.studentsCount : 0;
-    });
-
-    return SuccessHandler({ monthlyCounts, pastSixMonths }, 200, res, "Monthly student enrollment retrieved successfully");
-  } catch (error) {
-    return ErrorHandler(error.message || "Internal server error", error.statusCode || 500, res);
-  }
-},
-
 
 };
 
