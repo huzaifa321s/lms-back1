@@ -7,7 +7,6 @@ const router = express.Router();
 
 // Course
 router.route('/course/get').get(courseController.get);
-router.route('/course/getCourse').get(courseController.getCourse);
 
 // Games
 router.route('/game/training-wheel-game/get').get([isAuthenticated, isStudent], gamesController.getTrainingWheelQuestions);

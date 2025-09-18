@@ -1,70 +1,7 @@
 import ErrorHandler from "../functions/ErrorHandler.js";
 import SuccessHandler from "../functions/SuccessHandler.js";
-// 
-//  {
-//     _id: new ObjectId('68905d310c43b06a7cb255ab'),
-//     name: 'smart last name',
-//     phone: null,
-//     bio: 'sdfa',
-//     email: 'smart@gmail.com',
-//     profile: '[object FileList]',
-//     subscriptionPriceId: 'price_1PUXjiEdtHnRsYCMTMgc8M7S',
-//     subscriptionStatus: 'active',
-//     coursesCount: 0,
-//     courseIds: [],
-//     planActive: true,
-//     plan: 'Daily'
-//   }
 
 
-
-//       const students = await Student.find(searchQuery).skip(itemsPerPage)
-//       const studentsEnrolled = [];
-
-//       for (let i = 0; i < students.length; i++) {
-//         studentsEnrolled.push(... await EnrolledCourses.find({ student: students[i]._id }))
-//       }
-
-// {
-//     _id: new ObjectId('689c24239d6132e66f078324'),
-//     profile: '[object FileList]',
-//     bio: 'sdfa',
-//     email: 'test@example.com',
-//     phone: null,
-//     name: 'Test First Name Test Last Name',
-//     subscriptionPriceId: 'price_1P6eq0EdtHnRsYCMGORU2F9n',
-//     subscriptionStatus: 'active',
-//     enrolledCourses: [ [Object], [Object] ],
-//     planActive: true,
-//     plan: 'Silver'
-//   }
-//       const result = [];
-
-//       const map = new Map();
-
-//       for (const e of studentsEnrolled) {
-
-//         if (!map.has(e.student.toString())) {
-//           map.set(e.student.toString(), new Set());
-//         }
-//         map.get(e.student.toString()).add(e.course.toString());
-//       }
-// console.log('students ===>',students)
-//       // ab map se result nikalo
-//       for (const [index,[student, courses]] of Array.from(map.entries()).entries()) {
-//         result.push({
-//           student: new mongoose.Types.ObjectId(student),
-//           uniqueCourses: [...courses],
-//           coursesCount: courses.size,
-//           bio:students[index].bio,
-//           plan:students[index].plan,
-//           phone:students[index].phone,
-//           profile:students[index].profile
-//         });
-//       }
-
-//       console.log(result);
-// 
 class VerifyUser {
   userType = "<User Type>";
   checkTokenExpiryFlag = true;
