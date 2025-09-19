@@ -29,12 +29,6 @@ const convertTimestamp = (timestamp) => {
     return date.toISOString().split('T')[0];
 };
 
-// Validate environment variables at startup
-const requiredEnvVars = ["BRONZE_PRICE_ID", "SILVER_PRICE_ID", "GOLD_PRICE_ID", "DAILY_PRICE_ID"];
-requiredEnvVars.forEach((envVar) => {
-    if (!process.env[envVar]) throw new Error(`Missing environment variable: ${envVar}`);
-});
-
 // Input validation
 const validateInput = ({ plan, paymentMethodId, user }) => {
     const validPlans = ["Bronze", "Silver", "Gold", "Daily"];
