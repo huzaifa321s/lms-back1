@@ -81,6 +81,14 @@ const teacherSchema = new mongoose.Schema({
       ref: 'Course', 
     }
   ],
+  students: [
+    
+      {
+        type: String,
+        ref: 'Student',
+      }
+    
+  ],
   notifications: [
     {
       type: mongoose.Schema.Types.ObjectId,

@@ -29,6 +29,8 @@ const convertTimestamp = (timestamp) => {
     return date.toISOString().split('T')[0];
 };
 
+
+
 // Input validation
 const validateInput = ({ plan, paymentMethodId, user }) => {
     const validPlans = ["Bronze", "Silver", "Gold", "Daily"];

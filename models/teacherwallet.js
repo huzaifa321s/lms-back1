@@ -10,6 +10,7 @@ const teacherWalletSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+
 });
 
 const TeacherWallet = mongoose.model('TeacherWallet', teacherWalletSchema);

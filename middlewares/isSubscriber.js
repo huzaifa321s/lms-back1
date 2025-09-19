@@ -2,6 +2,7 @@ import Subscription from "../models/subscription.js";
 import ErrorHandler from "../utils/functions/ErrorHandler.js";
 
 const isSubscriber = async (req, res, next) => {
+    console.log('res.user.subsciption ===>',req.user)
     if (req.user.subscriptionId) {
         const subscriptionPlan = await Subscription.findById(req.user.subscriptionId);
         if (subscriptionPlan.status !== 'active' && subscriptionPlan.status !== 'past_due') {

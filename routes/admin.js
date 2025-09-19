@@ -32,6 +32,7 @@ router.route('/dashboard/top-courses').get([isAuthenticated, isAdmin], dashboard
 router.route('/dashboard/earnings').get([isAuthenticated, isAdmin], dashboardController.getEarnings);
 router.route('/dashboard/top-teachers').get([isAuthenticated, isAdmin], dashboardController.getTopTeachers);
 router.route('/dashboard/registered-last-week').get([isAuthenticated, isAdmin], dashboardController.getRegistrationsLastWeek);
+router.route('/get-creds').get([isAuthenticated, isAdmin], dashboardController.getCreds);
 
 // Blogs
 router.route('/blog/get').get([isAuthenticated, isAdmin], blogController.get);

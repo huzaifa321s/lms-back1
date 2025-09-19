@@ -19,6 +19,7 @@ router.route('/generateOTP').put(teacherController.generateOTP);
 router.route('/verifyOTP').put(teacherController.verifyOTP);
 router.route('/forgotPassword').post(teacherController.forgotPassword);
 router.route('/resetPassword/:id/:token').post(teacherController.resetPassword);
+router.route('/get-creds').get([isAuthenticated, isTeacher], dashboardController.getCreds);
 router.route('/updateProfile').put([isAuthenticated, isTeacher], teacherController.updateProfile);
 router.route('/updatePassword').put([isAuthenticated, isTeacher], teacherController.updatePassword);
 

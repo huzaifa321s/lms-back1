@@ -4,9 +4,22 @@ import TeacherWallet from "../../models/teacherwallet.js";
 import EnrolledCourses from '../../models/enrolledcourses.js';
 import ErrorHandler from "../../utils/functions/ErrorHandler.js";
 import SuccessHandler from "../../utils/functions/SuccessHandler.js";
+import Teacher from '../../models/teacher.js';
 
 const dashboardController = {
-
+    getCreds: async (req, res) => {
+        try {
+            
+          const id = req.user._id;
+          const teacher = await Teacher.findById(id);
+          console.log('teacher ===>',teacher)
+          if(!teacher) return ErrorHandler('Teacher not found', 400, res);
+          return SuccessHandler(teacher, 200, res, `Got creds!`);
+        } catch (error) {
+            console.log('error', error)
+            return ErrorHandler('Internal server error', 500, res);
+        }
+    },
     getCards: async (req, res) => {
         try {
             const lastWeekStartDate = moment().subtract(1, 'weeks').startOf('week');
@@ -50,11 +63,11 @@ const dashboardController = {
                 const distinctStudents = await EnrolledCourses.distinct('student', { course: c._id });
                 studentsCount.push(distinctStudents.length);
             }
-        
+
             const borderColor = courses.map((c) => c.color);
             const backgroundColor = courses.map((c) => c.color.replace('1)', '0.8)'));
             const dounutData = { courseLabels, studentsCount, borderColor, backgroundColor };
-       console.log('dounutData ====>',dounutData)
+            console.log('dounutData ====>', dounutData)
             return SuccessHandler(dounutData, 200, res, `Course by Students!`);
         } catch (error) {
             console.error("Error:", error);

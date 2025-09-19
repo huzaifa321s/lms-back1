@@ -9,6 +9,7 @@ const SECRET_KEY = process.env.SECRET_KEY;
 const isAuthenticated = async (req, res, next) => {
   const tokenHeader = req.header("Authorization");
   if (!tokenHeader) {
+    console.log('tokenHeader ===>',tokenHeader)
     return ErrorHandler("Unauthorized: Token not provided", 401, res);
   }
 

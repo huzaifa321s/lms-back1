@@ -13,11 +13,25 @@ import GameCategory from '../../models/gamecategory.js';
 import stripe from 'stripe';
 import { getPlansOverview } from '../../utils/functions/admin/getPlansOverview.js';
 import mongoose from 'mongoose';
+import Admin from '../../models/admin.js';
 
 const stripeInstance = stripe(process.env.STRIPE_SECRET_KEY);
 
 
 const dashboardController = {
+   getCreds: async (req, res) => {
+          try {
+              
+            const id = req.user._id;
+            const admin = await Admin.findById(id);
+            console.log('admin ===>',admin)
+            if(!admin) return ErrorHandler('Admin not found', 400, res);
+            return SuccessHandler(admin, 200, res, `Got creds!`);
+          } catch (error) {
+              console.log('error', error)
+              return ErrorHandler('Internal server error', 500, res);
+          }
+      },
     getCards: async (req, res) => {
            try {
     const totalTeachers = await Teacher.countDocuments();

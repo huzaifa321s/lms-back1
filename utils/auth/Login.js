@@ -14,37 +14,62 @@ class Login {
     }
 
     async loginUser(req, res) {
-        const userData = req.body;
-        console.log('code run')
-        try {
-            const validationErrorMessage = this.validateFields(userData);
-            if (validationErrorMessage) return ErrorHandler(validationErrorMessage, 400, res);
+  const userData = req.body;
+  console.log("userData ===>",userData);
 
-            const user = await this.checkUserExist(userData);
-            if (!user) return ErrorHandler(`${this.userType} not found`, 400, res);
-
-            if (this.verfiedAccountCheck && !this.isVerified(user)) {
-                return ErrorHandler(`${this.userType} not verified`, 400, res);
-            }
-
-            const isMatch = await user.comparePassword(userData.password);
-            if (!isMatch) return ErrorHandler("Password does not match!", 400, res);
-
-            if (this.twoFactorFeature && this.twoFactorLogin(user)) {
-                return SuccessHandler(null, 200, res, "Two-factor authentication code is sent to your email");
-            } else {
-                const credentials = await this.getCredentials(user);
-                const token = await user.getJWTToken();
-                console.log('credentials ===>',credentials);
-                console.log('token ===>',token);
-
-                return SuccessHandler({ credentials, token }, 200, res, `${this.userType} authenticated, logged in successfully!`);
-            }
-        } catch (error) {
-            console.error(`Error verifying ${this.userType}:`, error);
-            return ErrorHandler(`Internal server error`, 500, res);
-        }
+  try {
+    // ✅ Validate fields
+    const validationErrorMessage = this.validateFields(userData);
+    if (validationErrorMessage) {
+      return ErrorHandler(validationErrorMessage, 400, res);
     }
+
+    // ✅ Check if user exists
+    const user = await this.checkUserExist(userData);
+    if (!user) {
+      return ErrorHandler(`${this.userType} not found`, 400, res);
+    }
+
+    // ✅ Check if account is verified (if required)
+    if (this.verfiedAccountCheck && !this.isVerified(user)) {
+      return ErrorHandler(`${this.userType} not verified`, 400, res);
+    }
+
+    // ✅ Compare password
+    const isMatch = await user.comparePassword(userData.password);
+    if (!isMatch) {
+      return ErrorHandler("Password does not match!", 400, res);
+    }
+
+    // ✅ Handle Two-Factor Authentication
+    if (this.twoFactorFeature && this.twoFactorLogin(user)) {
+      return SuccessHandler(
+        null,
+        200,
+        res,
+        "Two-factor authentication code has been sent to your email."
+      );
+    }
+
+    // ✅ Generate Credentials & Token
+    const credentials = await this.getCredentials(user);
+    const token = await user.getJWTToken();
+
+    console.log("credentials ===>", credentials);
+    console.log("token ===>", token);
+
+    return SuccessHandler(
+      { credentials, token },
+      200,
+      res,
+      `${this.userType} authenticated and logged in successfully!`
+    );
+  } catch (error) {
+    console.error(`Error logging in ${this.userType}:`, error);
+    return ErrorHandler("Internal server error", 500, res);
+  }
+}
+
 
 
     validateFields(fields) {
@@ -64,6 +89,7 @@ class Login {
     async checkUserExist(reqBody) {
         const { email } = reqBody;
         const user = await this.userModel.findOne({ email });
+        console.log('this.userModel ===>',this.userModel)
         return user
     }
 
