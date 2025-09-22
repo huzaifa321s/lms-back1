@@ -8,12 +8,12 @@ const router = express.Router();
 
 // router.route('/searchUser').get(testController.searchUser);
 
-// // Relational db
+// // Relational db 
 router.route('/test').post(testController.test);
 router.route('/test2').post(testController.test2);
 // router.route('/addState').post(testController.addState);
 // router.route('/searchCities').get(testController.searchCities);
 // router.route('/searchStates').get(testController.searchStates);
-
+ 
 
 export default router;
