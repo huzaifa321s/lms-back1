@@ -60,9 +60,9 @@ const gameCategoryController = {
         }
     },
 
-    getAll: async (_, res) => {
+    getAll: async (req, res) => {
         try {
-            const allGameCategories = await GameCategory.find().lean;
+            const allGameCategories = await GameCategory.find().lean();
             return SuccessHandler(allGameCategories, 200, res, `Game categories retrieved!`);
         } catch (error) {
             console.error("Error:", error);
