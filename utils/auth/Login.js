@@ -55,9 +55,6 @@ class Login {
     const credentials = await this.getCredentials(user);
     const token = await user.getJWTToken();
 
-    console.log("credentials ===>", credentials);
-    console.log("token ===>", token);
-
     return SuccessHandler(
       { credentials, token },
       200,
