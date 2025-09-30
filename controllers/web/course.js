@@ -47,10 +47,11 @@ if (q) {
     },
     getCourse:async(req,res) =>{
         const {courseID,userID} = req.query;
-        console.log('req.query ===>',req.query)
-        console.log('userID ==>',userID)
+        
+console.log('req.user',req.user)
         
         try{
+            
           const course = await Course.findById(courseID).populate('instructor category');
           const studentEnrolled = await EnrolledCourses.findOne({course:courseID,student:userID});
           console.log('studentEnrolled',studentEnrolled)
@@ -58,14 +59,39 @@ if (q) {
           if(allEnrolledStudents?.length > 0){
            allEnrolledStudents = Array.from(new Map(allEnrolledStudents.map((aec  => [aec.student.toString(),aec]) )).values())
           }
-          console.log('allEnrolledStudents ==>',allEnrolledStudents)
-          console.log('course ==>',course)
-          return SuccessHandler({ course ,isEnrolled:studentEnrolled ? true : false,enrolledStudents:allEnrolledStudents?.length}, 200, res, `Course retrieved!`);
+
+          return SuccessHandler({ course ,isEnrolled:studentEnrolled ? true : false,enrolledStudents:allEnrolledStudents?.length,isLoggedIn: Boolean(req?.user?.id)}, 200, res, `Course retrieved!`);
         }catch(error){
             console.log('error',error);
             return ErrorHandler('Internal server error', 500, res);
         }
+    },
+      getLandingCourses: async (req, res) => {
+    try {
+      // Query params: limit aur sort
+      const { limit, sort } = req.query;
+
+      const selectedLimit = parseInt(limit) || 6;
+      const sortOrder = sort === "asc" ? 1 : -1; 
+
+      // Fetch courses with only required fields
+      const courses = await Course.find({})
+        .select("name description coverImage color instructor category createdAt")
+        .populate("instructor category", "name") // sirf name field populate karte hain
+        .sort({ createdAt: sortOrder })
+        .limit(selectedLimit);
+
+      return SuccessHandler(
+        { courses },
+        200,
+        res,
+        "Landing courses retrieved!"
+      );
+    } catch (error) {
+      console.error("Landing Courses Error:", error);
+      return ErrorHandler("Internal server error", 500, res);
     }
+  },
 
 };
 
