@@ -18,7 +18,7 @@ const manageUsersController = {
             if (userType.toLowerCase() === 'student') Model = Student;
             if (userType.toLowerCase() === 'teacher') Model = Teacher;
 
-            const totalUsers = await Model.countDocuments();
+            const totalUsers = await Model.estimatedDocumentCount();
             const totalPages = Math.ceil(totalUsers / itemsPerPage);
 
             const users = await Model.find().select(excluded).skip(skip).limit(itemsPerPage);
