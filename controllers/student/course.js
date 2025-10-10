@@ -36,7 +36,7 @@ const courseController = {
                 { $addToSet: { students: { student: req.user._id?.toString() } } },
                 { upsert: true, new: true }
             );
-            
+
             student.remainingEnrollmentCount -= 1;
             await student.save();
 
@@ -61,16 +61,23 @@ const courseController = {
                 .populate({
                     path: "course",
                     match: { name: { $regex: q, $options: "i" } },
-
+                      populate: {
+                    path: "instructor",
+                    select: "firstName lastName"
+                }
                 })
                 .select("course");
 
             let allEnrolledCourses = await EnrolledCourses.find({ student: req.user._id }).populate({
                 path: "course",
+                select: "name description",
                 match: { name: { $regex: q, $options: "i" } },
+             
             });
-            allEnrolledCourses = allEnrolledCourses.filter((ec => ec.course !== null))
 
+
+            allEnrolledCourses = allEnrolledCourses.filter((ec => ec.course !== null))
+            console.log('allEnrolledCourses', allEnrolledCourses[0])
             let filteredEnrolledCourses = enrolledCourses.filter((ec => ec.course !== null))
 
             filteredEnrolledCourses = filteredEnrolledCourses.map((ec => ec = ec.course));
