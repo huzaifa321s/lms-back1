@@ -4,7 +4,7 @@ import gamesController from "../controllers/web/game.js";
 import { isAuthenticated, isStudent } from "../middlewares/Auth.js";
 import blogControllerWeb from "../controllers/web/blog.js";
 import jwt from 'jsonwebtoken';
-
+  
 const router = express.Router();
 const optionalAuth = (req, res, next) => {
     const token = req.cookies?.studentToken || req.headers["authorization"]?.split(" ")[1];
