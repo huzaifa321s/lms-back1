@@ -235,11 +235,10 @@ const paymentController = {
 
     updateSubscriptionPlan: async (req, res) => {
         const { newPlan } = req.body;
-        
+
         const { subscriptionId, _id: userId, customerId, firstName, lastName } = req.user || {};
-        console.log('userId ===>',userId)
+        console.log('userId ===>', userId)
         try {
-          
             // Validate inputs
             validateInputForPlanUpgration({ newPlan, user: req.user });
             // Start MongoDB transaction
@@ -272,7 +271,7 @@ const paymentController = {
                     [{ user: userId, customerId, priceId: updatedPriceId, status: "pending" }],
                     { session }
                 );
-console.log('dbReceipt._id ===>',dbReceipt._id)
+                console.log('dbReceipt._id ===>', dbReceipt._id)
                 // Update Stripe subscription
                 const updatedSubscription = await stripeInstance.subscriptions.update(
                     currentSubscriptionReceipt.subscriptionId,
@@ -287,7 +286,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
                         billing_cycle_anchor: "now",
                     }
                 );
-// console.log('udpatedSubscription ==>',updatedSubscription)
+                // console.log('udpatedSubscription ==>',updatedSubscription)
                 // Update DB receipt with Stripe data
                 await Subscription.updateOne(
                     { _id: dbReceipt._id },
@@ -313,7 +312,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
                     { subscriptionId: dbReceipt._id, remainingEnrollmentCount },
                     { session }
                 );
-  console.log('req.user ===>',req.user)
+                console.log('req.user ===>', req.user)
                 // Mark previous subscription as updated
                 await Subscription.updateOne(
                     { _id: currentSubscriptionReceipt._id },
@@ -325,7 +324,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
                 result = {
                     subscription: await getStudentActivePlan(dbReceipt),
                     remainingEnrollmentCount,
-                    user:req.user
+                    user: req.user
                 };
 
             });
@@ -391,7 +390,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
             console.info(`Subscription ${subscriptionId} canceled for user ${req.user._id}`);
 
             return SuccessHandler({
-                subscription: {status:'canceled'},
+                subscription: { status: 'canceled' },
                 remainingEnrollmentCount: 0,
             }, 200, res, 'Subscription canceled successfully');
         } catch (error) {
@@ -592,7 +591,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
     getAllInvoices: async (req, res) => {
         try {
             const { customerId } = req.user;
-            let { paid ,length} = req.query;
+            let { paid, length } = req.query;
             let page = 'undefined'
             if (!customerId) return ErrorHandler("Not registered on stripe!", 400, res);
 
@@ -634,7 +633,7 @@ console.log('dbReceipt._id ===>',dbReceipt._id)
             });
 
 
-console.log('invoices ===>',invoices.length)
+            console.log('invoices ===>', invoices.length)
             return SuccessHandler(
                 { invoices, has_more: invoiceList.has_more },
                 200,
@@ -828,7 +827,7 @@ console.log('invoices ===>',invoices.length)
 
 
 
-   
+
 
         console.log('event.type ===>', event.type)
         switch (event.type) {

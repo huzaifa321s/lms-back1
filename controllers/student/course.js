@@ -11,7 +11,7 @@ import Teacher from "../../models/teacher.js";
 const courseController = {
     enrollCourse: async (req, res) => {
         try {
-            console.log('req.user ===>',req.user)
+            console.log('req.user ===>', req.user)
             const course = await Course.findById(req.body.courseId);
             if (!course) return ErrorHandler('Course not found!', 404, res);
 
@@ -31,58 +31,57 @@ const courseController = {
                 { $inc: { points: 10 } },
                 { upsert: true },
             );
-            const teacher = await  Teacher.findById(course.instructor);
-          if (!teacher.students?.some(s => s.student === req.user._id.toString())) {
-                const id = req.user._id.toString()
-                teacher.students.push(id);
-                await teacher.save();
-            }
-              console.log('teacher ---<>',teacher.students)
+            await Teacher.findOneAndUpdate(
+                { _id: course.instructor },
+                { $addToSet: { students: { student: req.user._id?.toString() } } },
+                { upsert: true, new: true }
+            );
+            
             student.remainingEnrollmentCount -= 1;
             await student.save();
 
             return SuccessHandler({ remainingEnrollmentCount: student.remainingEnrollmentCount }, 200, res, `Enrolled successfully!`);
         } catch (error) {
-            console.log('error',error)
+            console.log('error', error)
             return ErrorHandler('Internal server error', 500, res);
         }
     },
 
     getEnrolledCourses: async (req, res) => {
-        const { page , q, countDocs } = req.query;
+        const { page, q, countDocs } = req.query;
         const skip = (page - 1) * 10;
 
         try {
             if (!req.user) return ErrorHandler('Unauthorized', 400, res);
-console.log('q ===>',q)
+            console.log('q ===>', q)
             const enrolledCourses = await EnrolledCourses.find({ student: req.user._id })
                 .skip(skip)
                 .limit(10)
                 .sort({ createdAt: -1 })
                 .populate({
                     path: "course",
-                    match: { name:{$regex:q,$options:"i"} }, 
-        
+                    match: { name: { $regex: q, $options: "i" } },
+
                 })
                 .select("course");
 
             let allEnrolledCourses = await EnrolledCourses.find({ student: req.user._id }).populate({
-                    path: "course",
-                    match: { name:{$regex:q,$options:"i"} }, 
-                });
+                path: "course",
+                match: { name: { $regex: q, $options: "i" } },
+            });
             allEnrolledCourses = allEnrolledCourses.filter((ec => ec.course !== null))
-            
+
             let filteredEnrolledCourses = enrolledCourses.filter((ec => ec.course !== null))
-            
+
             filteredEnrolledCourses = filteredEnrolledCourses.map((ec => ec = ec.course));
-            console.log('filteredEnrolledCourses',filteredEnrolledCourses)
+            console.log('filteredEnrolledCourses', filteredEnrolledCourses)
 
 
             if (countDocs) return SuccessHandler(allEnrolledCourses.length, 200, res, 'Count retrieved');
- 
+
             const totalPages = Math.ceil(allEnrolledCourses.length / 10);
             console.log('totalPages ===>', totalPages)
-            return SuccessHandler({ courses:filteredEnrolledCourses, totalPages }, 200, res, 'Courses retrieved');
+            return SuccessHandler({ courses: filteredEnrolledCourses, totalPages }, 200, res, 'Courses retrieved');
         } catch (error) {
             return ErrorHandler('Internal server error', 500, res);
         }
@@ -142,14 +141,14 @@ console.log('q ===>',q)
     },
 
     get: async (req, res) => {
-        const { page , q, teacherId } = req.query;
+        const { page, q, teacherId } = req.query;
         const skip = (page - 1) * 5;
-       console.log('page ===>',page)
+        console.log('page ===>', page)
         try {
             let query = {};
             if (q) query.name = { $regex: q, $options: "i" };
             if (teacherId) query.instructor = teacherId;
-              console.log('query',query)
+            console.log('query', query)
             const [courses, total] = await Promise.all([
                 Course.find(query)
                     .skip(skip)

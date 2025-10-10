@@ -28,7 +28,7 @@ const studentController = {
 
       const studentsAgg = await Student.aggregate([
         {
-          $match: searchQuery // ✅ search students first
+          $match: searchQuery
         },
         {
           $lookup: {
