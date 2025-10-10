@@ -11,7 +11,6 @@ const dashboardController = {
   get: async (req, res) => {
     try {
       const isSubscriber = checkSubscription(req.user.subscriptionId);
-
       // Get enrolled courses
       const enrollments = await EnrolledCourses.find({ student: req.user._id }, 'course').lean();
       const courseIds = enrollments.map(e => e.course);
@@ -43,27 +42,28 @@ const dashboardController = {
         stripeInstance.paymentMethods.list({ customer: req.user.customerId })
       ]);
       // Calculate spending by year
-    const spendingByYear = {}; // <-- Initialize outside reduce
+      const spendingByYear = {}; // <-- Initialize outside reduce
 
-const totalCents = invoices.data.reduce((sum, inv) => {
-  const cents = inv.amount_paid || 0;
-  const date = new Date(inv.created * 1000);
-  const year = String(date.getFullYear());
-  const month = date.toLocaleString("default", { month: "short" });
-  
-  console.log('month ===>',month)
-  // make sure year object exists
-  if (!spendingByYear[year]) {
-    spendingByYear[year] = {};
-  }
+      const totalCents = invoices.data.reduce((sum, inv) => {
+        const cents = inv.amount_paid || 0;
+        const date = new Date(inv.created * 1000);
+        const year = String(date.getFullYear());
+        const month = date.toLocaleString("default", { month: "short" });
 
-  // make sure month is accumulated
-  spendingByYear[year][month] = (spendingByYear[year][month] || 0) + cents / 100;
+        // make sure year object exists
+        if (!spendingByYear[year]) {
+          spendingByYear[year] = {};
+        }
+        console.log('month ===>', month)
+        console.log('totalCents ==>',totalCents)
 
-  return sum + cents;
-}, 0);
+        // make sure month is accumulated
+        spendingByYear[year][month] = (spendingByYear[year][month] || 0) + cents / 100;
 
-console.log("spendingByYear ===>", spendingByYear);
+        return sum + cents;
+      }, 0);
+
+      console.log("spendingByYear ===>", spendingByYear);
 
       return SuccessHandler({
         courses: coursesCount,

@@ -24,7 +24,7 @@ const dashboardController = {
 
       const id = req.user._id;
       const admin = await Admin.findById(id);
-      console.log('admin ===>', admin)
+
       if (!admin) return ErrorHandler('Admin not found', 400, res);
       return SuccessHandler(admin, 200, res, `Got creds!`);
     } catch (error) {
@@ -60,7 +60,7 @@ const dashboardController = {
       const studentsRegisteredLastWeek = await Student.countDocuments({
         createdAt: { $gte: lastWeekStartDate.toDate() }
       });
-console.log('totalTeachers',totalTeachers)
+      console.log('totalTeachers', totalTeachers)
       return SuccessHandler({
         totalTeachers,
         totalActiveTeachers,
@@ -76,45 +76,69 @@ console.log('totalTeachers',totalTeachers)
         gameCategories,
       }, 200, res, "Got cards!");
     } catch (error) {
-      console.log('error',error)
+      console.log('error', error)
       return ErrorHandler("Internal server error", 500, res);
     }
   },
   getEarnings: async (req, res) => {
     try {
+      // ✅ Fetch charges (latest 100 for now — good for small to mid-size apps)
       const charges = await stripeInstance.charges.list({ limit: 100 });
 
-      const total = charges.data.reduce((sum, c) => sum + c.amount, 0);
+      // ✅ Filter only successful, paid, non-refunded payments
+      const validCharges = charges.data.filter(
+        (c) => c.paid && !c.refunded && c.status === "succeeded"
+      );
+
+      // ✅ Calculate total earnings (in cents → dollars)
+      const total = validCharges.reduce((sum, c) => sum + c.amount, 0);
 
       const months = [];
       const earnings = [];
+
+      // ✅ Last 6 months (including current)
       for (let i = 5; i >= 0; i--) {
         const startOfMonth = moment().subtract(i, "months").startOf("month").unix();
         const endOfMonth = moment().subtract(i, "months").endOf("month").unix();
 
-        const monthCharges = charges.data.filter(
+        const monthCharges = validCharges.filter(
           (c) => c.created >= startOfMonth && c.created <= endOfMonth
         );
 
-        const totalMonth = monthCharges.reduce((sum, c) => sum + c.amount, 0);
+        const monthTotal = monthCharges.reduce((sum, c) => sum + c.amount, 0);
+
         months.push(moment.unix(startOfMonth).format("MMM"));
-        earnings.push(totalMonth / 100);
+        earnings.push(monthTotal / 100);
       }
 
-      const startOfMonth = moment().startOf("month").unix();
-      const thisMonthCharges = charges.data.filter(c => c.created >= startOfMonth);
-      const thisMonth = thisMonthCharges.reduce((sum, c) => sum + c.amount, 0);
+      // ✅ This month's earnings
+      const startOfThisMonth = moment().startOf("month").unix();
+      const thisMonthCharges = validCharges.filter(
+        (c) => c.created >= startOfThisMonth
+      );
+      const thisMonthTotal = thisMonthCharges.reduce(
+        (sum, c) => sum + c.amount,
+        0
+      );
 
-      return SuccessHandler({
-        totalEarnings: total / 100,
-        thisMonthTotalEarnings: thisMonth / 100,
-        months,
-        earnings,
-      }, 200, res, "Got earnings!");
+      // ✅ Response
+      return SuccessHandler(
+        {
+          total: total / 100,
+          thisMonthTotalEarnings: thisMonthTotal / 100,
+          months,
+          earnings,
+        },
+        200,
+        res,
+        "Got earnings!"
+      );
     } catch (error) {
+      console.error("Stripe Earnings Error:", error);
       return ErrorHandler("Internal server error", 500, res);
     }
   },
+
   getTopTeachers: async (req, res) => {
     try {
       const topTeachers = await EnrolledCourses.aggregate([
@@ -161,46 +185,69 @@ console.log('totalTeachers',totalTeachers)
     }
   },
   getTopCourses: async (req, res) => {
-    try {
-      const enrolledCourses = await EnrolledCourses.find({}).lean();
+     try {
+    const topCourses = await EnrolledCourses.aggregate([
+      {
+        $lookup: {
+          from: "courses",
+          localField: "course",
+          foreignField: "_id",
+          as: "courseData",
+        },
+      },
+      {
+        $unwind: "$courseData", // remove enrollments with deleted courses
+      },
+      {
+        $lookup: {
+          from: "users", // assuming instructor ref = users collection
+          localField: "courseData.instructor",
+          foreignField: "_id",
+          as: "instructorData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$instructorData",
+          preserveNullAndEmptyArrays: true, // in case instructor was deleted
+        },
+      },
+      {
+        $group: {
+          _id: "$courseData._id",
+          title: { $first: "$courseData.name" },
+          description: { $first: "$courseData.description" },
+          thumbnail: { $first: "$courseData.thumbnail" },
+          instructorName: {
+            $first: {
+              $concat: [
+                { $ifNull: ["$instructorData.firstName", ""] },
+                " ",
+                { $ifNull: ["$instructorData.lastName", ""] },
+              ],
+            },
+          },
+          studentsCount: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { studentsCount: -1 },
+      },
+      {
+        $limit: 5,
+      },
+    ]);
 
-      // Step 2: Group by course and count students manually
-      const courseCounts = {};
-      for (const enrollment of enrolledCourses) {
-        const courseId = enrollment.course; // Assuming course is stored as ObjectId or string
-        courseCounts[courseId] = (courseCounts[courseId] || 0) + 1;
-      }
-
-      // Step 3: Convert to array and sort by studentsCount, limit to 5
-      const sortedCourses = Object.entries(courseCounts)
-        .map(([courseId, studentsCount]) => ({ courseId, studentsCount }))
-        .sort((a, b) => b.studentsCount - a.studentsCount)
-        .slice(0, 5);
-      console.log('sortedCourses ===>', sortedCourses)
-      // Step 4: Fetch course details for the top 5 course IDs
-      const courseIds = sortedCourses.map(item => new mongoose.Types.ObjectId(item.courseId));
-      console.log('courseIds ===>', courseIds)
-      const courseDetails = await Course.find({ _id: { $in: courseIds } });
-      console.log('courseDetails ===>', courseDetails)
-      // Step 5: Map course details to the final result
-      const result = sortedCourses.map(item => {
-
-        const course = courseDetails.find(c => c._id.toString() === item.courseId);
-        console.log('item ===>', item)
-        return {
-          courseID: item.courseId,
-          title: course ? course.name : null,
-          description: course ? course.description : null,
-          studentsCount: item.studentsCount
-        };
-      });
-      const topCourses = result;
-      console.log('topCourses ===>', topCourses)
-      return SuccessHandler(topCourses, 200, res, "Got top courses!");
-    } catch (error) {
-      console.error("Error in getTopCourses:", error);
-      return ErrorHandler("Internal server error", 500, res);
+    if (!topCourses || topCourses.length === 0) {
+      return SuccessHandler([], 200, res, "No courses found!");
     }
+
+    return SuccessHandler(topCourses, 200, res, "Got top courses!");
+  } catch (error) {
+    console.error("Error in getTopCourses:", error);
+    return ErrorHandler("Internal server error", 500, res);
+  }
+
   },
 
   getRegistrationsLastWeek: async (req, res) => {

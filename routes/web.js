@@ -13,7 +13,7 @@ const optionalAuth = (req, res, next) => {
         req.user = null;
         return next();
     }
- 
+
     try {
         const decoded = jwt.verify(token, process.env.SECRET_KEY);
         req.user = decoded;
