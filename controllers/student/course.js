@@ -11,7 +11,7 @@ import Teacher from "../../models/teacher.js";
 const courseController = {
     enrollCourse: async (req, res) => {
         try {
-            const course = await Course.findById(req.body.courseId);
+            const course = await Course.findById(req.body.courseId).populate({path:"instructor",select:"_id"});
             if (!course) return ErrorHandler('Course not found!', 404, res);
 
             const student = await Student.findById(req.user._id);
@@ -26,13 +26,14 @@ const courseController = {
 
             // Update teacher wallet
             await TeacherWallet.findOneAndUpdate(
-                { teacher: course.instructor },
+                { teacher: course.instructor._id },
                 { $inc: { points: 10 } },
                 { upsert: true },
             );
+            console.log('course',course.instructor._id.toString())
             await Teacher.findOneAndUpdate(
-                { _id: course.instructor },
-                { $addToSet: { students: { student: req.user._id?.toString() } } },
+                { _id: course.instructor?._id },
+                { $addToSet: { students:  req.user._id  } },
                 { upsert: true, new: true }
             );
 
