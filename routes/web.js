@@ -3,7 +3,7 @@ import courseController from "../controllers/web/course.js";
 import gamesController from "../controllers/web/game.js";
 import { isAuthenticated, isStudent } from "../middlewares/Auth.js";
 import blogControllerWeb from "../controllers/web/blog.js";
-import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken'; 
 
 const router = express.Router();
 const optionalAuth = (req, res, next) => {

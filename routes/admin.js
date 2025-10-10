@@ -7,7 +7,7 @@ import courseCategoryController from "../controllers/admin/coursecategory.js";
 
 // import cityController from "../controllers/admin/city.js";
 // import stateController from "../controllers/admin/state.js";
-// import courseCategoryController from "../controllers/coursecategory.js"; 
+// import courseCategoryController from "../controllers/coursecategory.js";
 import { isAuthenticated, isAdmin } from "../middlewares/Auth.js";
 import studentController from "../controllers/admin/student.js";
 import teacherController from "../controllers/admin/teacher.js";

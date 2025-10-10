@@ -11,6 +11,7 @@ const dashboardController = {
   get: async (req, res) => {
     try {
       const isSubscriber = checkSubscription(req.user.subscriptionId);
+
       // Get enrolled courses
       const enrollments = await EnrolledCourses.find({ student: req.user._id }, 'course').lean();
       const courseIds = enrollments.map(e => e.course);
@@ -50,12 +51,11 @@ const dashboardController = {
         const year = String(date.getFullYear());
         const month = date.toLocaleString("default", { month: "short" });
 
+        console.log('month ===>', month)
         // make sure year object exists
         if (!spendingByYear[year]) {
           spendingByYear[year] = {};
         }
-        console.log('month ===>', month)
-        console.log('totalCents ==>',totalCents)
 
         // make sure month is accumulated
         spendingByYear[year][month] = (spendingByYear[year][month] || 0) + cents / 100;
