@@ -9,7 +9,6 @@ const stripeInstance = stripe(process.env.STRIPE_SECRET_KEY);
 
 const dashboardController = {
   get: async (req, res) => {
-    console.log('get func')
     try {
       const isSubscriber = checkSubscription(req.user.subscriptionId);
 

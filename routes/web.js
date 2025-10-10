@@ -3,7 +3,7 @@ import courseController from "../controllers/web/course.js";
 import gamesController from "../controllers/web/game.js";
 import { isAuthenticated, isStudent } from "../middlewares/Auth.js";
 import blogControllerWeb from "../controllers/web/blog.js";
-import jwt from 'jsonwebtoken'; 
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 const optionalAuth = (req, res, next) => {
@@ -26,11 +26,11 @@ const optionalAuth = (req, res, next) => {
 // Course
 router.route('/course/get').get(courseController.get);
 router.route('/course/getCourse').get(optionalAuth, courseController.getCourse);
+router.route('/course/get/details/:id').get(courseController.getDetails)
 router.route('/blog/get').get(blogControllerWeb.get);
 router.route('/blog/getBlog/:id').get(blogControllerWeb.getBlog);
 router.route('/courses/landing').get(courseController.getLandingCourses);
 router.route('/blogs/landing').get(blogControllerWeb.getLandingBlog);
-
 // Games
 router.route('/game/training-wheel-game/get').get([isAuthenticated, isStudent], gamesController.getTrainingWheelQuestions);
 

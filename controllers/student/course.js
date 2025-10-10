@@ -11,7 +11,6 @@ import Teacher from "../../models/teacher.js";
 const courseController = {
     enrollCourse: async (req, res) => {
         try {
-            console.log('req.user ===>', req.user)
             const course = await Course.findById(req.body.courseId);
             if (!course) return ErrorHandler('Course not found!', 404, res);
 

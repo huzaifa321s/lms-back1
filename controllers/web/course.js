@@ -11,7 +11,6 @@ const courseController = {
 
   get: async (req, res) => {
     const { page, q, userID, sort, category } = req.query;
-    console.log("req.query ===>", req.query)
     const pageNumber = parseInt(page) || 1;
     const itemsPerPage = 10
     let enrolledCourses = [];
@@ -19,8 +18,7 @@ const courseController = {
     const sortOrder =
       sort === 'oldest'
         ? { updatedAt: 1 }
-        : { updatedAt: -1 }; // default 'newest'
-    console.log('sortOrder', sortOrder)
+        : { updatedAt: -1 };
     try {
 
       let query = {}
@@ -28,7 +26,6 @@ const courseController = {
         const search = q.trim()
         query = { name: { $regex: new RegExp(search, "i") } }
       }
-      console.log('query', query)
 
       const totalCourses = await Course.countDocuments(query);
       const totalPages = Math.ceil(totalCourses / itemsPerPage);
@@ -39,43 +36,15 @@ const courseController = {
           name: { $regex: new RegExp(`^${category}$`, 'i') },
         }).select('_id');
 
-        console.log(`categoryDoc`, categoryDoc)
         if (categoryDoc) {
           matchStage.category = categoryDoc._id;
         } else {
-          // if category not found, return empty
           return SuccessHandler({ courses: [], totalPages: totalPages, enrolledCourses }, 200, res, `Courses retrieved!`);
         }
       }
 
       const courses = await Course.aggregate([
         { $match: matchStage },
-        {
-          $lookup: {
-            from: 'enrolledcourses',
-            localField: '_id',
-            foreignField: 'course',
-            as: 'enrollments',
-          },
-        },
-        {
-          $addFields: {
-            enrolledCount: { $size: '$enrollments' },
-          },
-        },
-        {
-          $project: {
-            enrollments: 0,
-          },
-        },
-        {
-          $lookup: {
-            from: 'teachers',
-            localField: 'instructor',
-            foreignField: '_id',
-            as: 'instructor',
-          },
-        },
         {
           $lookup: {
             from: 'coursecategories',
@@ -85,28 +54,34 @@ const courseController = {
           },
         },
         {
-          $unwind: { path: '$instructor', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $unwind: { path: '$category', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $project: {
-            name: 1,
-            description: 1,
-            coverImage: 1,
-            color: 1,
-            'instructor.firstName': 1,
-            'instructor.lastName': 1,
-            'category.name': 1,
-            enrolledCount: 1,
-            updatedAt: 1,
+          $unwind: {
+            path: '$category',
+            preserveNullAndEmptyArrays: true,
           },
         },
+
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            coverImage: 1,
+            'category.name': 1,
+            description: {
+              $cond: [
+                { $gt: [{ $strLenCP: '$description' }, 120] },
+                { $concat: [{ $substrCP: ['$description', 0, 120] }, '...'] },
+                '$description',
+              ],
+            },
+          },
+        },
+
+        // 🧭 Sorting, pagination
         { $sort: sortOrder },
         { $skip: skip },
         { $limit: itemsPerPage },
       ]);
+
 
 
       for (let i = 0; i < courses.length; i++) {
@@ -116,23 +91,93 @@ const courseController = {
       if (enrolledCourses?.length) {
         enrolledCourses = [... new Set(enrolledCourses.map((ec) => ec.course.toString()))]
       }
-      console.log('courses ===>', courses)
       return SuccessHandler({ courses, totalPages, enrolledCourses }, 200, res, `Courses retrieved!`);
     } catch (error) {
       console.error("Error:", error);
       return ErrorHandler('Internal server error', 500, res);
     }
   },
+getDetails: async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const courseDetails = await Course.aggregate([
+      // 🎯 Match course by ID
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+
+      // 👥 Join instructor
+      {
+        $lookup: {
+          from: 'teachers',
+          localField: 'instructor',
+          foreignField: '_id',
+          as: 'instructor',
+        },
+      },
+      { $unwind: { path: '$instructor', preserveNullAndEmptyArrays: true } },
+
+      // 🏷️ Join category (optional, if you also want category name)
+      {
+        $lookup: {
+          from: 'coursecategories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+
+      // 📊 Join enrolledCourses to count students
+      {
+        $lookup: {
+          from: 'enrolledcourses',
+          localField: '_id',
+          foreignField: 'course',
+          as: 'enrollments',
+        },
+      },
+      {
+        $addFields: {
+          enrolledCount: { $size: '$enrollments' },
+        },
+      },
+
+      // 🧾 Project only needed fields
+      {
+        $project: {
+          description: 1,
+          updatedAt: 1,
+          enrolledCount: 1,
+          material:1,
+          'category.name': 1,
+          'instructor._id': 1,
+          'instructor.firstName': 1,
+          'instructor.lastName': 1,
+
+        },
+      },
+    ]);
+
+    if (!courseDetails.length) {
+      return ErrorHandler('Course not found', 404, res);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: courseDetails[0],
+    });
+  } catch (error) {
+    console.log('error', error);
+    return ErrorHandler('Internal server error', 500, res);
+  }
+},
+
   getCourse: async (req, res) => {
     const { courseID, userID } = req.query;
-
-    console.log('req.user', req.user)
-
     try {
 
       const course = await Course.findById(courseID).populate('instructor category');
       const studentEnrolled = await EnrolledCourses.findOne({ course: courseID, student: userID });
-      console.log('studentEnrolled', studentEnrolled)
       let allEnrolledStudents = await EnrolledCourses.find({ course: courseID })
       if (allEnrolledStudents?.length > 0) {
         allEnrolledStudents = Array.from(new Map(allEnrolledStudents.map((aec => [aec.student.toString(), aec]))).values())
